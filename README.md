@@ -1,177 +1,181 @@
 # Ledgerly — Multi-Tenant SaaS Accounting Application
+**The Core Accounting Spine (MVP Demonstrator)**
 
-**Ledgerly** is a high-integrity, multi-tenant SaaS accounting application designed for small and growing businesses, functionally comparable to Zoho Books. It is engineered with a strict double-entry ledger, transaction-local Row-Level Security (RLS), immutable posted journals, and snapshot-preserved invoicing.
+**Ledgerly** is a high-integrity, multi-tenant SaaS accounting engine inspired by Zoho Books. It is engineered with a strict double-entry general ledger, transaction-local PostgreSQL Row-Level Security (RLS), immutable posted journals, snapshot-preserved sales invoicing, atomic payment allocations, and real-time authoritative financial reports (Trial Balance & AR Ageing).
 
 ---
 
-## 1. Phase 0: Repository Bootstrap and RLS Validation
+## 1. Core Architecture & Financial Invariants
 
-This repository is currently at **Phase 0**. It establishes the core project structure, FastAPI application skeleton, database migration pipeline via Alembic, and an empirical PostgreSQL Row-Level Security (RLS) validation spike.
+The application follows the architectural rules defined in the system documentation and implemented sequentially across 7 milestones:
 
-### Technology Stack
-- **Runtime:** Python 3.11+
-- **Framework:** FastAPI (ASGI)
-- **Database Engine:** SQLAlchemy 2.0 (Async) + `asyncpg`
-- **Validation:** Pydantic v2 + Pydantic Settings
-- **Database:** PostgreSQL 15+ (local or Docker Compose)
-- **Migrations:** Alembic (Async)
-- **Testing:** Pytest, pytest-asyncio, HTTPX
+```mermaid
+flowchart LR
+    subgraph Invoicing["Milestone 4: Invoicing"]
+        Draft["Draft Invoice"] -->|"issue_invoice()"| Issue["Atomic Issuance"]
+        Issue -->|"JP-01 Posting"| GL["Double-Entry Ledger"]
+    end
+
+    subgraph Payments["Milestone 5: Payments"]
+        Receipt["Payment Receipt"] -->|"record_payment()"| Post["Atomic JP-03 Posting"]
+        Post -->|"Allocations Trigger"| ARUpdate["Rollup Invoice Settled Amount"]
+    end
+
+    subgraph Ledgers["Milestone 3: Posting Gateway"]
+        GL -->|"Deferred Trigger"| Balance["tg_journals__balanced (Net Zero)"]
+        GL -->|"Immutability"| Immutable["tg_journals__immutable"]
+    end
+
+    subgraph Reports["Milestone 6: Financial Reports"]
+        GL -->|"SELECT SUM"| TB["Trial Balance (Real-Time)"]
+        ARUpdate -->|"SELECT Ageing"| AR["AR Ageing (Reconciled to Acct 1200)"]
+    end
+```
+
+### Key Engineering Invariants:
+1. **Financial Arithmetic Precision:** Strictly uses Python `decimal.Decimal` and PostgreSQL `Numeric(19, 4)`. Binary floating-point arithmetic is completely prohibited. Half-Up rounding is consistently applied.
+2. **Transaction-Local Multi-Tenancy (RLS):** All runtime queries run under application role `ledgerly_app` with `NOBYPASSRLS`. Tenant context is injected per transaction via `set_config('app.current_org_id', :org_id, true)`. Missing or mismatched tenant contexts fail closed.
+3. **Atomic Posting Gateway:** An invoice issuance and its JP-01 double-entry posting occur inside a single atomic database transaction. Likewise, a payment and its JP-03 posting occur atomically. If any part fails, the entire transaction rolls back.
+4. **Authoritative Ledger Immutability:** Posted journals (`app.journals` and `app.journal_lines`) cannot be edited or deleted through application paths. Modifications must be processed via reversal journals (JP-02 for voided invoices, JP-04 for reversed payments).
+5. **Database-Level Double-Entry Balance Trigger:** In addition to domain-level validation, PostgreSQL constraint trigger `tg_journals__balanced` executes at `COMMIT` (`INITIALLY DEFERRED`) to ensure that Total Debits equal Total Credits with zero discrepancy.
+6. **Sub-Ledger to General Ledger Reconciliation:** The Accounts Receivable summary derives customer-level balances that reconcile 100% to the balance of the GL Accounts Receivable control account (`1200`).
 
 ---
 
 ## 2. Directory Structure
 
-```
+```text
 .
-├── 01_PRD (1).md                  # Source Product Requirements Document (Draft v0.1)
-├── 02_Workflows (1).md            # Source Workflow Specifications (Draft v0.1)
-├── 03_Architecture (1).md         # Source Architecture Design (Draft v0.1)
-├── 04_Database_Design (1).md      # Source Database Design Specification (Draft v0.1)
+├── 01_PRD (1).md                           # Product Requirements Document
+├── 02_Workflows (1).md                     # Accounting Workflow Specifications
+├── 03_Architecture (1).md                  # System & Tenancy Architecture Design
+├── 04_Database_Design (1).md               # Schema & Table Specifications
 ├── docs/
-│   └── IMPLEMENTATION_READINESS_REPORT.md  # Comprehensive Pre-Implementation Readiness Report
+│   ├── IMPLEMENTATION_READINESS_REPORT.md  # Comprehensive Pre-Implementation Audit
+│   └── DEMO_ACCEPTANCE_REPORT.md           # Formal Milestone 7 Acceptance Report
 ├── backend/
-│   ├── alembic/                   # Database migration environment
+│   ├── alembic/                            # Database migrations (0001 through 0005)
 │   │   ├── versions/
-│   │   │   └── 0001_initial_bootstrap.py  # Schemas (identity, app, audit, platform) & RLS helpers
-│   │   ├── env.py
-│   │   └── script.py.mako
+│   │   │   ├── 0001_initial_bootstrap.py   # Schemas, roles & RLS context functions
+│   │   │   ├── 0002_master_data.py         # Users, Orgs, Accounts, TaxRates, Contacts, Items
+│   │   │   ├── 0003_ledger_schema.py       # Journals, Journal Lines, Immutability & Balance Triggers
+│   │   │   ├── 0004_invoices_schema.py     # Invoices, Lines, Legal Snapshots & Sequence
+│   │   │   └── 0005_payments_schema.py     # Payments, Allocations & DB Rollup Triggers
 │   ├── app/
 │   │   ├── api/
 │   │   │   ├── endpoints/
-│   │   │   │   └── health.py      # Liveness and Database connectivity checks
-│   │   │   └── router.py          # Central API router
+│   │   │   │   ├── accounts.py             # Chart of Accounts API
+│   │   │   │   ├── auth.py                 # User authentication & registration
+│   │   │   │   ├── contacts.py             # Customers & Vendors API
+│   │   │   │   ├── demo.py                 # Live demo seed & cross-tenant attack probe
+│   │   │   │   ├── health.py               # Liveness & database connectivity checks
+│   │   │   │   ├── invoices.py             # Draft creation, calculation, issuance, voiding
+│   │   │   │   ├── items.py                # Goods & Services catalog API
+│   │   │   │   ├── ledger.py               # Double-entry journals inspection API
+│   │   │   │   ├── organizations.py        # Organization provisioning & settings
+│   │   │   │   ├── payments.py             # Payment recording, allocations, reversals
+│   │   │   │   ├── reports.py              # Trial Balance & AR Summary reports
+│   │   │   │   └── tax_rates.py            # Generic percentage tax rates API
+│   │   │   ├── deps.py                     # Tenant and User session injection
+│   │   │   └── router.py                   # Central API routing
 │   │   ├── core/
-│   │   │   ├── config.py          # Pydantic BaseSettings loading from .env
-│   │   │   └── database.py        # AsyncEngine, AsyncSession, and tenant context helpers
-│   │   └── main.py                # FastAPI application entrypoint with CORS and lifespan
-│   ├── tests/
-│   │   ├── spike/
-│   │   │   └── test_rls_spike.py  # Standalone PostgreSQL RLS validation test suite (9 tests)
-│   │   ├── conftest.py            # Async test fixtures and database engines
-│   │   └── test_health.py         # Health endpoint tests
-│   ├── alembic.ini
-│   ├── Dockerfile
-│   ├── pyproject.toml
-│   └── requirements.txt
+│   │   │   ├── config.py                   # Pydantic Settings & CORS rules
+│   │   │   ├── database.py                 # AsyncEngine, Session Local, RLS setters
+│   │   │   └── security.py                 # Password hashing & verification
+│   │   ├── models/                         # SQLAlchemy 2.0 Async Models
+│   │   ├── schemas/                        # Pydantic v2 Request & Response schemas
+│   │   └── services/
+│   │       ├── coa_seed.py                 # Standard 11-account Chart of Accounts seed
+│   │       ├── invoice_service.py          # Invoice calculation & issuance engine
+│   │       ├── payment_service.py          # Payment receipt & allocation service
+│   │       ├── posting_gateway.py          # Pure validation & atomic ledger persistence
+│   │       └── report_service.py           # Authoritative Trial Balance & AR Ageing
+│   ├── scripts/
+│   │   └── seed_demo.py                    # Deterministic demonstration provisioning script
+│   └── tests/                              # Comprehensive Automated Test Suite (33 tests)
+│       ├── api/
+│       ├── e2e/
+│       ├── ledger/
+│       ├── master_data/
+│       ├── receipts/
+│       ├── reports/
+│       ├── sales/
+│       └── spike/
 ├── frontend/
-│   └── README.md                  # Frontend scaffold placeholder (React + Vite + TypeScript)
-├── .env.example                   # Environment configuration template
-├── docker-compose.yml             # Local Docker services (PostgreSQL 16 + Backend)
-├── .gitignore
+│   ├── index.html                          # Single-page interactive demonstration UI
+│   └── README.md
+├── docker-compose.yml                      # PostgreSQL 16 & backend service setup
 └── README.md
 ```
 
 ---
 
-## 3. Local Development Setup
+## 3. Quick Start & Demonstration
 
 ### Prerequisites
-1. **Python 3.11+** installed (`py --version` or `python3 --version`).
-2. **PostgreSQL 15+** running locally on port 5432 (or launched via `docker compose up -d postgres`).
+- Python 3.11+
+- PostgreSQL 16 running on `localhost:5432` with user `postgres` / password `postgres`
+- Runtime database user `ledgerly_app` with password `ledgerly_secret` (`NOBYPASSRLS`)
 
-### Step-by-Step Setup
-
-#### 1. Clone & Initialize Environment
-```bash
-# In the workspace root
-py -3.11 -m venv backend/.venv
-
-# Activate virtual environment (Windows PowerShell)
-.\backend\.venv\Scripts\Activate.ps1
-# (Linux/macOS)
-# source backend/.venv/bin/activate
-
-# Install dependencies
-pip install -r backend/requirements.txt
-```
-
-#### 2. Configure Environment Variables
-Copy `.env.example` to `backend/.env`:
-```bash
-cp .env.example backend/.env
-```
-Ensure your database credentials in `backend/.env` match your local PostgreSQL server:
-- `ADMIN_DATABASE_URL`: Connection URL with permissions to execute DDL (e.g., `postgres` superuser).
-- `DATABASE_URL`: Connection URL for application runtime (`ledgerly_app` role with `NOBYPASSRLS`).
-
-#### 3. Database Initialization
-Create the development and test databases and the non-superuser application role in PostgreSQL:
-```sql
-CREATE DATABASE ledgerly_dev;
-CREATE DATABASE ledgerly_test;
-
-CREATE ROLE ledgerly_app WITH LOGIN PASSWORD 'ledgerly_secret' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-GRANT CONNECT ON DATABASE ledgerly_dev TO ledgerly_app;
-GRANT CONNECT ON DATABASE ledgerly_test TO ledgerly_app;
-```
-
-#### 4. Run Migrations
-Apply the initial bootstrap migration (creates schemas `identity`, `app`, `audit`, `platform` and RLS helper functions):
-```bash
+### 1. Database & Migrations Setup
+```powershell
 cd backend
-alembic upgrade head
+# Create dev & test databases if not already present
+# Run migrations up to latest (0005)
+.\.venv\Scripts\alembic.exe upgrade head
 ```
 
-#### 5. Start the Development Server
-```bash
+### 2. Launch the Development Server & Interactive UI
+```powershell
 cd backend
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
-- API Base: `http://127.0.0.1:8000/api/v1`
-- Swagger UI Documentation: `http://127.0.0.1:8000/docs`
-- Health Endpoint: `http://127.0.0.1:8000/health`
-- Database Readiness Endpoint: `http://127.0.0.1:8000/health/db`
 
----
+Open your browser to:
+- 👉 **Demonstration Web Dashboard:** `http://127.0.0.1:8000/`
+- 👉 **Interactive API Docs (Swagger):** `http://127.0.0.1:8000/docs`
+- 👉 **Health Endpoint:** `http://127.0.0.1:8000/health`
 
-## 4. Standalone RLS Validation Spike
+### 3. Run the Demonstration Seed Script (Console)
+For automated terminal demonstration output:
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts/seed_demo.py
+```
+This script executes the entire 14-step journey and prints the authoritative Trial Balance and Accounts Receivable reconciliation directly to the terminal.
 
-The RLS spike verifies that multi-tenant isolation is enforced at the database kernel level, preventing any cross-tenant data exposure even if an application bug omits a `WHERE organization_id = :org_id` clause.
-
-### Architectural Invariants Proven:
-1. **Multi-Tenant Partitioning:** Data created in Organization A's transaction context is completely invisible to Organization B.
-2. **Fail-Closed Behavior:** Queries executed without tenant context (`current_setting('app.current_org_id', true)` is empty/null) return **0 rows** on reads and **raise an RLS policy violation** on writes.
-3. **Cross-Tenant Attack Resistance:**
-   - Attempting to query another tenant's record by UUID returns 0 rows (looks like 404 Not Found).
-   - Attempting to update or delete another tenant's record affects 0 rows.
-   - Attempting to insert a row with another tenant's `organization_id` fails with an RLS policy check violation.
-4. **Connection Pool Safety:**
-   - Setting context via transaction-local `set_config('app.current_org_id', :org_id, true)` (`is_local=true`) resets cleanly on `COMMIT`, `ROLLBACK`, or `EXCEPTION`.
-   - Subsequent transactions reusing the exact same connection start with zero context and cannot read any tenant's data.
-5. **Concurrent Pool Contention:** Concurrent asynchronous worker tasks contending for connections in a small pool process isolated queries without cross-talk or leakage.
-
-### Running the RLS & Health Test Suite
-From the `backend/` directory:
-```bash
+### 4. Run the Full Automated Test Suite
+```powershell
+cd backend
 .\.venv\Scripts\pytest.exe -v
 ```
-
-### Verified Test Results (Executed on PostgreSQL 16.14):
-```
-tests/spike/test_rls_spike.py::test_rls_multi_tenant_isolation PASSED            [  8%]
-tests/spike/test_rls_spike.py::test_rls_fails_closed_without_context PASSED     [ 16%]
-tests/spike/test_rls_spike.py::test_rls_cross_tenant_read_prevented PASSED     [ 25%]
-tests/spike/test_rls_spike.py::test_rls_cross_tenant_update_and_delete_prevented PASSED [ 33%]
-tests/spike/test_rls_spike.py::test_rls_cross_tenant_forged_insert_rejected PASSED [ 41%]
-tests/spike/test_rls_spike.py::test_rls_connection_reuse_after_commit PASSED     [ 50%]
-tests/spike/test_rls_spike.py::test_rls_connection_reuse_after_rollback PASSED   [ 58%]
-tests/spike/test_rls_spike.py::test_rls_connection_reuse_after_exception PASSED  [ 66%]
-tests/spike/test_rls_spike.py::test_rls_concurrent_pool_contention PASSED       [ 75%]
-tests/test_health.py::test_health_check_endpoint PASSED                          [ 83%]
-tests/test_health.py::test_api_v1_health_check_endpoint PASSED                   [ 91%]
-tests/test_health.py::test_database_health_check_endpoint PASSED                 [100%]
-
-============================= 12 passed in 1.22s ==============================
-```
+All **33 automated tests** pass against the real local PostgreSQL 16 database.
 
 ---
 
-## 5. Connection Pooling & PgBouncer Assumptions
+## 4. The 14-Step Non-Negotiable Demonstration Journey
 
-- **Transaction-Local Setting:** All tenant context binding is performed using:
-  ```sql
-  SELECT set_config('app.current_org_id', :org_id, true);
-  ```
-  The third parameter (`is_local = true`) is critical. In PostgreSQL, this sets the parameter for the duration of the current transaction only.
-- **PgBouncer Transaction Pooling Mode:** In production with PgBouncer operating in `pool_mode = transaction`, connection assignments to clients change on every transaction boundary. Because `set_config(..., true)` is automatically cleared by the PostgreSQL server upon transaction completion, no session state persists on the underlying server connection, making this design 100% safe for PgBouncer transaction pooling.
-- **Application Role Safeguard:** The application connects under `ledgerly_app`, which has `NOBYPASSRLS`. Tables in schema `app` have `FORCE ROW LEVEL SECURITY`, preventing policy bypass even if the table owner queries them.
+| Step | Action | Endpoint / Service | Financial & Security Outcome |
+| :--- | :--- | :--- | :--- |
+| **1** | Configure Organization | `POST /api/v1/organizations` | Creates Acme Global Corporation with tenant ID. |
+| **2** | Seed Chart of Accounts | `POST /api/v1/accounts/seed` | Provisions 11 standard accounts (`1010` to `5090`). |
+| **3** | Create Customers | `POST /api/v1/contacts` | Creates TechWave Enterprises & OmniRetail Partners. |
+| **4** | Create Products/Services | `POST /api/v1/items` | Creates Annual Cloud License ($4,800) & Advisory ($250). |
+| **5** | Configure Generic Tax | `POST /api/v1/tax-rates` | Configures State Sales Tax (8.25%) linked to Acct 2100. |
+| **6** | Create Draft Sales Invoice | `POST /api/v1/invoices` | Line items entered; saved in editable `draft` state. |
+| **7** | Calculate Invoice Totals | `InvoiceService` | Deterministic subtotal, tax, and grand total via Half-Up rounding. |
+| **8** | Issue Invoice & Post JP-01 | `POST /api/v1/invoices/{id}/issue` | Atomically issues invoice and posts JP-01 double-entry journal. |
+| **9** | Record Customer Payment | `POST /api/v1/payments` | Records partial payment ($2,500.00) against issued invoice. |
+| **10** | Post Payment Journal (JP-03)| `PaymentService` | Atomically posts JP-03 (Dr Bank, Cr AR) and updates invoice balances. |
+| **11** | Recalculate Outstanding AR | DB Allocation Trigger | `tg_payment_allocations__apply` updates remaining balance atomically. |
+| **12** | Authoritative Trial Balance | `GET /api/v1/reports/trial-balance` | Real-time journal line query proving Net Zero equality ($8,778.50 == $8,778.50). |
+| **13** | Accounts Receivable Report | `GET /api/v1/reports/ar-summary` | Sub-ledger aged receivables ($3,778.50) exactly match GL Acct 1200 ($3,778.50). |
+| **14** | Cross-Tenant Isolation | `GET /api/v1/demo/isolation-spike` | Proves Org B cannot read or modify Org A records under RLS. 0 rows leaked. |
+
+---
+
+## 5. Scope Boundaries
+
+In accordance with strict scope control:
+- **Included:** Core accounting spine, double-entry general ledger, sales invoicing, payments, receipt allocations, real-time trial balance, accounts receivable ageing, PostgreSQL RLS tenant isolation.
+- **Explicitly Deferred:** India GST (CGST/SGST/IGST/HSN), subscription billing recurring engines, opening balance batches, complex approval workflows, multi-currency conversion, external worker clusters (Celery/Redis), and third-party webhooks (n8n).

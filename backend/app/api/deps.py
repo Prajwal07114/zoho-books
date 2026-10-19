@@ -53,6 +53,15 @@ async def get_current_user(
     return user
 
 
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Provide a raw database session without pre-set tenant context (for public/bootstrap endpoints)."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+
 async def get_user_session(
     current_user: User = Depends(get_current_user),
 ) -> AsyncGenerator[AsyncSession, None]:

@@ -20,8 +20,16 @@ class Settings(BaseSettings):
 
     # Server Binding
     HOST: str = "127.0.0.1"
-    PORT: int = 8000
-    CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    CORS_ORIGINS: Union[List[str], str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
     # Database URLs
     # Administrative Connection (for migrations and DDL)

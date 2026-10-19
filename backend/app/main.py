@@ -44,6 +44,21 @@ def create_application() -> FastAPI:
     app.include_router(api_router, prefix="/api/v1")
     app.include_router(api_router)  # Allow /health at root as well
 
+    # Serve Demonstration Frontend at root
+    import os
+    from starlette.responses import HTMLResponse
+
+    frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "index.html"))
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    async def serve_demo_ui():
+        if os.path.exists(frontend_path):
+            with open(frontend_path, "r", encoding="utf-8") as f:
+                return HTMLResponse(content=f.read())
+        return HTMLResponse(
+            content="<html><body><h1>Ledgerly Core Accounting Spine API</h1><p>Visit <a href='/docs'>/docs</a> for OpenAPI specification.</p></body></html>"
+        )
+
     return app
 
 
