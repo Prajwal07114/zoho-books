@@ -41,6 +41,7 @@ class Invoice(Base):
     tax_amount: Mapped[Decimal] = mapped_column(Numeric(19, 4), default=Decimal(0), nullable=False)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(19, 4), default=Decimal(0), nullable=False)
     settled_amount: Mapped[Decimal] = mapped_column(Numeric(19, 4), default=Decimal(0), nullable=False)
+    credit_noted_amount: Mapped[Decimal] = mapped_column(Numeric(19, 4), default=Decimal(0), nullable=False)
     snapshot: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     issued_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     issued_by: Mapped[Optional[uuid.UUID]] = mapped_column(

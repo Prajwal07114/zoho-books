@@ -478,6 +478,16 @@
     .badge-processing { background: rgba(99, 102, 241, 0.15); color: #818CF8; border: 1px solid rgba(99, 102, 241, 0.3); }
     .badge-sent { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }
     .badge-failed { background: rgba(239, 68, 68, 0.15); color: #F87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge-posted { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-active { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-inactive { background: rgba(156, 163, 175, 0.15); color: #9CA3AF; border: 1px solid rgba(156, 163, 175, 0.3); }
+    .badge-reversed { background: rgba(239, 68, 68, 0.15); color: #F87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .subnav-tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; overflow-x: auto; }
+    .subnav-btn { background: transparent; border: 1px solid var(--border-accent); border-radius: 6px; color: var(--text-muted); padding: 8px 14px; font-size: 12px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+    .subnav-btn:hover { color: var(--text-main); border-color: var(--primary); }
+    .subnav-btn.active { background: rgba(16, 185, 129, 0.15); color: var(--primary); border-color: var(--primary); font-weight: 600; }
+    .report-pane { display: none; }
+    .report-pane.active { display: block; }
 
     /* Forms */
     .form-grid {
@@ -655,22 +665,34 @@
   <!-- Navigation -->
   <nav>
     <button class="nav-btn active" id="nav-master" onclick="switchTab('master')">
-      🏢 1. Master Data & CoA
+      🏢 1. Master & CoA
     </button>
     <button class="nav-btn" id="nav-invoices" onclick="switchTab('invoices')">
-      🧾 2. Invoicing & JP-01
+      🧾 2. Invoicing (JP-01)
     </button>
     <button class="nav-btn" id="nav-payments" onclick="switchTab('payments')">
-      💳 3. Payments & JP-03
+      💳 3. Receipts (JP-03)
+    </button>
+    <button class="nav-btn" id="nav-bills" onclick="switchTab('bills')">
+      📦 4. Vendors & Bills (JP-07)
+    </button>
+    <button class="nav-btn" id="nav-expenses" onclick="switchTab('expenses')">
+      💸 5. Expenses (JP-11)
+    </button>
+    <button class="nav-btn" id="nav-supplier-payments" onclick="switchTab('supplier-payments')">
+      🏦 6. Supplier Payments (JP-09)
+    </button>
+    <button class="nav-btn" id="nav-credit-notes" onclick="switchTab('credit-notes')">
+      🔄 7. Credit Notes (JP-05)
     </button>
     <button class="nav-btn" id="nav-reports" onclick="switchTab('reports')">
-      📊 4. Authoritative Reports
+      📊 8. Reports & GL
     </button>
     <button class="nav-btn" id="nav-security" onclick="switchTab('security')">
-      🛡️ 5. Multi-Tenant RLS Spike
+      🛡️ 9. RLS Spike
     </button>
     <button class="nav-btn" id="nav-notifications" onclick="switchTab('notifications')">
-      🔔 6. Notifications & Outbox
+      🔔 10. Outbox
     </button>
   </nav>
 
@@ -693,6 +715,11 @@
         <div class="kpi-label">Outstanding AR</div>
         <div class="kpi-value text-warning" id="kpi-outstanding">$0.00</div>
         <div class="kpi-sub">Reconciles to GL Acct 1200</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Outstanding AP</div>
+        <div class="kpi-value text-danger" id="kpi-ap-outstanding">$0.00</div>
+        <div class="kpi-sub">Reconciles to GL Acct 2010</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Trial Balance Net Zero</div>
@@ -957,9 +984,179 @@
       </div>
     </section>
 
-    <!-- TAB 4: AUTHORITATIVE REPORTS -->
+    <!-- TAB 4: VENDORS & PURCHASE BILLS (JP-07 / JP-08) -->
+    <section id="tab-bills" class="tab-pane">
+      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;">
+        <!-- Vendors -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Vendors (Suppliers)</div>
+              <div class="card-desc">Master data for accounts payable creditors.</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="showNewVendorModal()">+ New Vendor</button>
+          </div>
+          <div class="table-container">
+            <table id="tbl-vendors">
+              <thead>
+                <tr>
+                  <th>Vendor Name</th>
+                  <th>Tax ID</th>
+                  <th>Terms</th>
+                  <th>Status</th>
+                  <th style="text-align: center;">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="5" style="text-align:center;">Loading vendors...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Purchase Bills -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Purchase Bills (Supplier Invoices)</div>
+              <div class="card-desc">Direct double-entry purchase liability posting (JP-07) and void reversal (JP-08).</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="showNewBillModal()">+ New Purchase Bill</button>
+          </div>
+          <div class="table-container">
+            <table id="tbl-bills">
+              <thead>
+                <tr>
+                  <th>Bill #</th>
+                  <th>Vendor</th>
+                  <th>Inv Ref</th>
+                  <th>Date</th>
+                  <th>Due</th>
+                  <th style="text-align: right;">Total</th>
+                  <th style="text-align: right;">Settled</th>
+                  <th style="text-align: center;">State</th>
+                  <th style="text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="9" style="text-align:center;">Loading bills...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: DIRECT EXPENSES (JP-11 / JP-12) -->
+    <section id="tab-expenses" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Direct Business Expenses (Cash/Bank Disbursements)</div>
+            <div class="card-desc">Non-bill expense vouchers posted directly to Expense & Asset accounts (JP-11) and void reversals (JP-12).</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="showNewExpenseModal()">+ Record Expense</button>
+        </div>
+        <div class="table-container">
+          <table id="tbl-expenses">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Expense Account</th>
+                <th>Payment Account</th>
+                <th>Description</th>
+                <th style="text-align: right;">Net</th>
+                <th style="text-align: right;">Tax</th>
+                <th style="text-align: right;">Total</th>
+                <th>Status</th>
+                <th>Reference</th>
+                <th style="text-align: center;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="10" style="text-align:center;">Loading expenses...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: SUPPLIER PAYMENTS (JP-09 / JP-10) -->
+    <section id="tab-supplier-payments" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Supplier Payments & Bill Allocations</div>
+            <div class="card-desc">Settlement of vendor bills against cash/bank (JP-09) and reversals (JP-10).</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="showNewSupplierPaymentModal()">+ New Supplier Payment</button>
+        </div>
+        <div class="table-container">
+          <table id="tbl-supplier-payments">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Vendor</th>
+                <th>Method</th>
+                <th>Reference</th>
+                <th style="text-align: right;">Amount</th>
+                <th style="text-align: center;">Status</th>
+                <th style="text-align: center;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="7" style="text-align:center;">Loading supplier payments...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 7: SALES CREDIT NOTES (JP-05 / JP-06) -->
+    <section id="tab-credit-notes" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Sales Credit Notes & Invoicing Deductions</div>
+            <div class="card-desc">Reduces Accounts Receivable and reverses revenue with strict over-crediting prevention (JP-05) and void reversal (JP-06).</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="showNewCreditNoteModal()">+ New Credit Note</button>
+        </div>
+        <div class="table-container">
+          <table id="tbl-credit-notes">
+            <thead>
+              <tr>
+                <th>Credit Note #</th>
+                <th>Customer</th>
+                <th>Invoice Ref</th>
+                <th>Date</th>
+                <th style="text-align: right;">Total</th>
+                <th style="text-align: center;">State</th>
+                <th style="text-align: center;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="7" style="text-align:center;">Loading credit notes...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 8: AUTHORITATIVE REPORTS -->
     <section id="tab-reports" class="tab-pane">
-      <!-- Trial Balance -->
+      <!-- Sub-navigation Tabs -->
+      <div class="subnav-tabs">
+        <button class="subnav-btn active" id="btn-subnav-tb" onclick="switchReportSubnav('tb')">⚖️ Trial Balance</button>
+        <button class="subnav-btn" id="btn-subnav-pl" onclick="switchReportSubnav('pl')">📈 Profit & Loss</button>
+        <button class="subnav-btn" id="btn-subnav-bs" onclick="switchReportSubnav('bs')">🏛️ Balance Sheet</button>
+        <button class="subnav-btn" id="btn-subnav-gl" onclick="switchReportSubnav('gl')">📒 General Ledger</button>
+        <button class="subnav-btn" id="btn-subnav-ar" onclick="switchReportSubnav('ar')">👥 AR Ageing (Debtors)</button>
+        <button class="subnav-btn" id="btn-subnav-ap" onclick="switchReportSubnav('ap')">🏭 AP Ageing (Creditors)</button>
+      </div>
+
+      <!-- PANE 1: Trial Balance -->
+      <div id="rep-pane-tb" class="report-pane active">
       <div class="card">
         <div class="card-header">
           <div>
@@ -1003,7 +1200,10 @@
         </div>
       </div>
 
-      <!-- Accounts Receivable Ageing -->
+      </div></div>
+
+      <!-- PANE 2: Accounts Receivable Ageing -->
+      <div id="rep-pane-ar" class="report-pane">
       <div class="card">
         <div class="card-header">
           <div>
@@ -1041,9 +1241,144 @@
           <span class="badge badge-settled">ZERO DISCREPANCY</span>
         </div>
       </div>
+      </div>
+
+      <!-- PANE 3: Accounts Payable Ageing & GL 2010 Reconciliation -->
+      <div id="rep-pane-ap" class="report-pane">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Accounts Payable Summary & General Ledger Reconciliation</div>
+              <div class="card-desc">Sub-ledger aged creditors reconciled against General Ledger Account 2010 (Accounts Payable).</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadAPSummary()">🔄 Refresh AP</button>
+          </div>
+          <div class="table-container">
+            <table id="tbl-ap-summary">
+              <thead>
+                <tr>
+                  <th>Vendor</th>
+                  <th style="text-align: right;">Total Billed</th>
+                  <th style="text-align: right;">Total Paid</th>
+                  <th style="text-align: right;">Current (0-30d)</th>
+                  <th style="text-align: right;">31-60 Days</th>
+                  <th style="text-align: right;">61-90 Days</th>
+                  <th style="text-align: right;">90+ Days</th>
+                  <th style="text-align: right;">Outstanding</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="8" style="text-align:center;">Loading AP summary...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="banner-reconciled" id="banner-ap-reconciled">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 16px;">🎯</span>
+              <div>
+                <div style="font-weight: 600; color: var(--primary);" id="ap-recon-title">AP Sub-ledger to General Ledger 100% Reconciled</div>
+                <div style="font-size: 11px; color: var(--text-muted);" id="ap-recon-desc">Sub-ledger Total exactly equals General Ledger Control Account 2010.</div>
+              </div>
+            </div>
+            <span class="badge badge-settled">ZERO DISCREPANCY</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANE 4: Profit & Loss Statement -->
+      <div id="rep-pane-pl" class="report-pane">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Profit & Loss Statement (Operating Statement)</div>
+              <div class="card-desc">Revenue and Expenses derived from posted double-entry journal lines.</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadProfitAndLoss()">🔄 Refresh P&L</button>
+          </div>
+          <div class="table-container">
+            <table id="tbl-pl-report">
+              <thead>
+                <tr>
+                  <th>Account Code</th>
+                  <th>Classification / Account Name</th>
+                  <th style="text-align: right;">Amount ($)</th>
+                </tr>
+              </thead>
+              <tbody id="pl-report-body">
+                <tr><td colspan="3" style="text-align:center;">Loading Profit and Loss...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANE 5: Balance Sheet -->
+      <div id="rep-pane-bs" class="report-pane">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Balance Sheet (Financial Position)</div>
+              <div class="card-desc">Assets = Liabilities + Equity invariant verified against live posted general ledger.</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadBalanceSheet()">🔄 Refresh Balance Sheet</button>
+          </div>
+          <div class="table-container">
+            <table id="tbl-bs-report">
+              <thead>
+                <tr>
+                  <th>Account Code</th>
+                  <th>Classification / Account Name</th>
+                  <th style="text-align: right;">Amount ($)</th>
+                </tr>
+              </thead>
+              <tbody id="bs-report-body">
+                <tr><td colspan="3" style="text-align:center;">Loading Balance Sheet...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANE 6: General Ledger Explorer -->
+      <div id="rep-pane-gl" class="report-pane">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">General Ledger Explorer</div>
+              <div class="card-desc">Auditable transaction journal line stream by account and date range.</div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <select id="gl-account-filter" class="form-control" style="width: 200px; padding: 4px 8px; font-size: 12px;" onchange="loadGeneralLedger()">
+                <option value="">All Accounts</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="loadGeneralLedger()">🔄 Run GL</button>
+            </div>
+          </div>
+          <div class="table-container">
+            <table id="tbl-gl-report">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Account</th>
+                  <th>Journal #</th>
+                  <th>Source</th>
+                  <th>Memo</th>
+                  <th style="text-align: right;">Debit ($)</th>
+                  <th style="text-align: right;">Credit ($)</th>
+                  <th style="text-align: right;">Running Bal</th>
+                </tr>
+              </thead>
+              <tbody id="gl-report-body">
+                <tr><td colspan="8" style="text-align:center;">Loading General Ledger...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </section>
 
-    <!-- TAB 5: SECURITY & CROSS-TENANT ISOLATION -->
+    <!-- TAB 9: SECURITY & CROSS-TENANT ISOLATION -->
     <section id="tab-security" class="tab-pane">
       <div class="card">
         <div class="card-header">
@@ -1277,6 +1612,289 @@
     </div>
   </div>
 
+
+  <!-- Vendor Modal -->
+  <div class="modal-backdrop" id="modal-vendor">
+    <div class="modal-box" style="max-width: 550px;">
+      <button class="modal-close" onclick="closeModal('modal-vendor')">&times;</button>
+      <h2 style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">🏢 New Vendor Record</h2>
+      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">Create a supplier account for purchase billing and payables.</div>
+      <form onsubmit="handleCreateVendor(event)">
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Vendor Display Name *</label>
+          <input type="text" id="vend-name" class="form-control" required placeholder="e.g. Acme Supplies Ltd">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="vend-email" class="form-control" placeholder="billing@vendor.com">
+          </div>
+          <div class="form-group">
+            <label>Phone Number</label>
+            <input type="text" id="vend-phone" class="form-control" placeholder="+1-555-0199">
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Tax Identifier (EIN / VAT)</label>
+            <input type="text" id="vend-tax-id" class="form-control" placeholder="US-EIN-123456789">
+          </div>
+          <div class="form-group">
+            <label>Payment Terms (Days)</label>
+            <input type="number" id="vend-terms" class="form-control" value="30" min="0" max="180">
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+          <div class="form-group">
+            <label>City</label>
+            <input type="text" id="vend-city" class="form-control" placeholder="Austin">
+          </div>
+          <div class="form-group">
+            <label>Country</label>
+            <input type="text" id="vend-country" class="form-control" value="USA">
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-vendor')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Vendor</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Purchase Bill Modal -->
+  <div class="modal-backdrop" id="modal-bill">
+    <div class="modal-box" style="max-width: 650px;">
+      <button class="modal-close" onclick="closeModal('modal-bill')">&times;</button>
+      <h2 style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">📦 New Purchase Bill</h2>
+      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">Create a draft supplier bill with line items for double-entry posting.</div>
+      <form onsubmit="handleCreateBill(event)">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Vendor *</label>
+            <select id="bill-vendor-select" class="form-control" required>
+              <option value="">Select Vendor...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Vendor Invoice # *</label>
+            <input type="text" id="bill-inv-num" class="form-control" required placeholder="e.g. INV-2026-991">
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Bill Date *</label>
+            <input type="date" id="bill-date" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label>Due Date *</label>
+            <input type="date" id="bill-due-date" class="form-control" required>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Line Description *</label>
+          <input type="text" id="bill-line-desc" class="form-control" required placeholder="Hardware server components">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+          <div class="form-group">
+            <label>Quantity *</label>
+            <input type="number" id="bill-line-qty" class="form-control" value="1.0000" step="0.0001" min="0.0001" required>
+          </div>
+          <div class="form-group">
+            <label>Unit Price ($) *</label>
+            <input type="number" id="bill-line-price" class="form-control" value="100.0000" step="0.0001" min="0" required>
+          </div>
+          <div class="form-group">
+            <label>Tax Rate</label>
+            <select id="bill-line-tax" class="form-control">
+              <option value="">No Tax (0%)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label>Internal Notes</label>
+          <input type="text" id="bill-notes" class="form-control" placeholder="Optional audit memo">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-bill')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Draft Bill</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Direct Expense Modal -->
+  <div class="modal-backdrop" id="modal-expense">
+    <div class="modal-box" style="max-width: 600px;">
+      <button class="modal-close" onclick="closeModal('modal-expense')">&times;</button>
+      <h2 style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">💸 Record Direct Expense</h2>
+      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">Direct cash or bank disbursement posted atomically to General Ledger (JP-11).</div>
+      <form onsubmit="handleCreateExpense(event)">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Expense Category Account *</label>
+            <select id="exp-account-select" class="form-control" required>
+              <option value="">Select Expense Account...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Payment Source Account *</label>
+            <select id="exp-payment-account-select" class="form-control" required>
+              <option value="">Select Bank / Cash...</option>
+            </select>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Expense Date *</label>
+            <input type="date" id="exp-date" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label>Reference #</label>
+            <input type="text" id="exp-ref" class="form-control" placeholder="e.g. RCPT-4401">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Description *</label>
+          <input type="text" id="exp-desc" class="form-control" required placeholder="Office equipment, software subscription, etc.">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+          <div class="form-group">
+            <label>Net Amount ($) *</label>
+            <input type="number" id="exp-amount" class="form-control" value="100.0000" step="0.0001" min="0.01" required>
+          </div>
+          <div class="form-group">
+            <label>Input Tax Rate</label>
+            <select id="exp-tax-select" class="form-control">
+              <option value="">No Tax (0%)</option>
+            </select>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-expense')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Post Expense (JP-11)</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Supplier Payment Modal -->
+  <div class="modal-backdrop" id="modal-supplier-payment">
+    <div class="modal-box" style="max-width: 650px;">
+      <button class="modal-close" onclick="closeModal('modal-supplier-payment')">&times;</button>
+      <h2 style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">🏦 Record Supplier Payment</h2>
+      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">Disburse funds to settle outstanding purchase bills with double-entry posting (JP-09).</div>
+      <form onsubmit="handleCreateSupplierPayment(event)">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Vendor *</label>
+            <select id="spay-vendor-select" class="form-control" required onchange="handleSupplierPaymentVendorChange()">
+              <option value="">Select Vendor...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Payment Date *</label>
+            <input type="date" id="spay-date" class="form-control" required>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Payment Method *</label>
+            <select id="spay-method" class="form-control" required>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="check">Check</option>
+              <option value="cash">Cash</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Reference #</label>
+            <input type="text" id="spay-ref" class="form-control" placeholder="e.g. WIRE-88102">
+          </div>
+          <div class="form-group">
+            <label>Total Payment ($) *</label>
+            <input type="number" id="spay-amount" class="form-control" step="0.0001" min="0.01" required placeholder="0.00">
+          </div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">BILL ALLOCATIONS</div>
+          <div class="table-container">
+            <table id="tbl-spay-allocations">
+              <thead>
+                <tr>
+                  <th>Bill #</th>
+                  <th>Inv Ref</th>
+                  <th style="text-align: right;">Total ($)</th>
+                  <th style="text-align: right;">Outstanding ($)</th>
+                  <th style="text-align: right; width: 140px;">Allocate ($)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="5" style="text-align:center; color: var(--text-muted);">Select a vendor to see eligible bills.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-supplier-payment')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Submit Payment (JP-09)</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Credit Note Modal -->
+  <div class="modal-backdrop" id="modal-credit-note">
+    <div class="modal-box" style="max-width: 650px;">
+      <button class="modal-close" onclick="closeModal('modal-credit-note')">&times;</button>
+      <h2 style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">🔄 New Sales Credit Note</h2>
+      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">Credit customer against an issued invoice and post receivable reduction (JP-05).</div>
+      <form onsubmit="handleCreateCreditNote(event)">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Original Issued Invoice *</label>
+            <select id="cn-invoice-select" class="form-control" required onchange="handleCreditNoteInvoiceChange()">
+              <option value="">Select Invoice...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Credit Note Date *</label>
+            <input type="date" id="cn-date" class="form-control" required>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Reason for Credit *</label>
+          <input type="text" id="cn-reason" class="form-control" required placeholder="Product return, billing dispute discount, etc.">
+        </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Line Description *</label>
+          <input type="text" id="cn-line-desc" class="form-control" required placeholder="Return of goods / service deduction">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+          <div class="form-group">
+            <label>Quantity *</label>
+            <input type="number" id="cn-line-qty" class="form-control" value="1.0000" step="0.0001" min="0.0001" required>
+          </div>
+          <div class="form-group">
+            <label>Unit Price ($) *</label>
+            <input type="number" id="cn-line-price" class="form-control" value="50.0000" step="0.0001" min="0.01" required>
+          </div>
+          <div class="form-group">
+            <label>Tax Rate</label>
+            <select id="cn-line-tax" class="form-control">
+              <option value="">No Tax (0%)</option>
+            </select>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-credit-note')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Draft Credit Note</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Toast Notification -->
   <div id="toast"></div>
 
@@ -1288,9 +1906,14 @@
     let orgBId = "";
     let cachedAccounts = [];
     let cachedCustomers = [];
+    let cachedVendors = [];
     let cachedItems = [];
     let cachedTaxRates = [];
     let cachedInvoices = [];
+    let cachedBills = [];
+    let cachedExpenses = [];
+    let cachedSupplierPayments = [];
+    let cachedCreditNotes = [];
 
     // Initialization
     window.addEventListener("DOMContentLoaded", async () => {
@@ -1300,6 +1923,11 @@
       document.getElementById("inv-date").value = today;
       document.getElementById("inv-due-date").value = dueDate;
       document.getElementById("pay-date").value = today;
+      if (document.getElementById("bill-date")) document.getElementById("bill-date").value = today;
+      if (document.getElementById("bill-due-date")) document.getElementById("bill-due-date").value = dueDate;
+      if (document.getElementById("exp-date")) document.getElementById("exp-date").value = today;
+      if (document.getElementById("spay-date")) document.getElementById("spay-date").value = today;
+      if (document.getElementById("cn-date")) document.getElementById("cn-date").value = today;
 
       await initContext();
     });
@@ -1371,6 +1999,11 @@
         loadMasterData(),
         loadInvoices(),
         loadPayments(),
+        loadVendors(),
+        loadBills(),
+        loadExpenses(),
+        loadSupplierPayments(),
+        loadCreditNotes(),
         loadReports(),
         loadNotifications(),
       ]);
@@ -1381,14 +2014,37 @@
       document.querySelectorAll(".tab-pane").forEach(el => el.classList.remove("active"));
       document.querySelectorAll(".nav-btn").forEach(el => el.classList.remove("active"));
 
-      document.getElementById(`tab-${tabName}`).classList.add("active");
-      document.getElementById(`nav-${tabName}`).classList.add("active");
+      const targetPane = document.getElementById(`tab-${tabName}`);
+      const targetNav = document.getElementById(`nav-${tabName}`);
+      if (targetPane) targetPane.classList.add("active");
+      if (targetNav) targetNav.classList.add("active");
 
       if (tabName === "reports") loadReports();
       if (tabName === "invoices") loadInvoices();
       if (tabName === "payments") loadPayments();
+      if (tabName === "bills") { loadVendors(); loadBills(); }
+      if (tabName === "expenses") loadExpenses();
+      if (tabName === "supplier-payments") loadSupplierPayments();
+      if (tabName === "credit-notes") loadCreditNotes();
       if (tabName === "master") loadMasterData();
       if (tabName === "notifications") loadNotifications();
+    }
+
+    // Reports Subnavigation
+    function switchReportSubnav(subnav) {
+      document.querySelectorAll(".report-pane").forEach(el => el.classList.remove("active"));
+      document.querySelectorAll(".subnav-btn").forEach(el => el.classList.remove("active"));
+
+      const pane = document.getElementById(`rep-pane-${subnav}`);
+      const btn = document.getElementById(`btn-subnav-${subnav}`);
+      if (pane) pane.classList.add("active");
+      if (btn) btn.classList.add("active");
+
+      if (subnav === "tb" || subnav === "ar") loadReports();
+      if (subnav === "ap") loadAPSummary();
+      if (subnav === "pl") loadProfitAndLoss();
+      if (subnav === "bs") loadBalanceSheet();
+      if (subnav === "gl") loadGeneralLedger();
     }
 
     // TAB 1: MASTER DATA
@@ -2040,6 +2696,853 @@
         t.style.display = "none";
       }, duration);
     }
+
+    // =========================================================================
+    // MILESTONE 1 & 2: VENDORS & BILLS
+    // =========================================================================
+    async function loadVendors() {
+      if (!currentOrgId) return;
+      try {
+        const res = await fetch("/api/v1/vendors", { headers: getHeaders() });
+        cachedVendors = await res.json();
+        renderVendorsTable(cachedVendors);
+        populateVendorDropdowns(cachedVendors);
+      } catch (e) {
+        console.error("Vendors load error:", e);
+      }
+    }
+
+    function renderVendorsTable(vendors) {
+      const tbody = document.querySelector("#tbl-vendors tbody");
+      if (!vendors || vendors.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No vendors found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = vendors.map(v => `
+        <tr>
+          <td><strong>${v.display_name}</strong><br><span style="font-size: 11px; color: var(--text-muted);">${v.email || '—'}</span></td>
+          <td class="td-mono">${v.tax_identifier || '—'}</td>
+          <td class="td-mono">${v.payment_terms_days}d</td>
+          <td><span class="badge ${v.status === 'active' ? 'badge-active' : 'badge-inactive'}">${v.status}</span></td>
+          <td style="text-align: center;">
+            ${v.status === 'active' ? `<button class="btn btn-secondary btn-sm" style="color: var(--danger); font-size: 11px;" onclick="deactivateVendor('${v.id}')">Deactivate</button>` : '—'}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function populateVendorDropdowns(vendors) {
+      const activeVendors = vendors.filter(v => v.status === "active");
+      const billSelect = document.getElementById("bill-vendor-select");
+      if (billSelect) {
+        billSelect.innerHTML = '<option value="">Select Vendor...</option>' + activeVendors.map(v => `
+          <option value="${v.id}">${v.display_name} (${v.payment_terms_days}d)</option>
+        `).join('');
+      }
+      const spaySelect = document.getElementById("spay-vendor-select");
+      if (spaySelect) {
+        spaySelect.innerHTML = '<option value="">Select Vendor...</option>' + activeVendors.map(v => `
+          <option value="${v.id}">${v.display_name}</option>
+        `).join('');
+      }
+    }
+
+    function showNewVendorModal() {
+      document.getElementById("modal-vendor").classList.add("active");
+    }
+
+    async function handleCreateVendor(e) {
+      e.preventDefault();
+      const payload = {
+        display_name: document.getElementById("vend-name").value.trim(),
+        email: document.getElementById("vend-email").value.trim() || null,
+        phone: document.getElementById("vend-phone").value.trim() || null,
+        tax_identifier: document.getElementById("vend-tax-id").value.trim() || null,
+        payment_terms_days: parseInt(document.getElementById("vend-terms").value || "30"),
+        billing_address: {
+          city: document.getElementById("vend-city").value.trim() || null,
+          country: document.getElementById("vend-country").value.trim() || "USA"
+        }
+      };
+
+      try {
+        const res = await fetch("/api/v1/vendors", {
+          method: "POST",
+          headers: getHeaders(),
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Vendor created successfully!");
+        closeModal("modal-vendor");
+        await loadVendors();
+      } catch (err) {
+        showToast("Error creating vendor: " + err.message);
+      }
+    }
+
+    async function deactivateVendor(vendorId) {
+      if (!confirm("Deactivate this vendor? Historical transactions will remain preserved.")) return;
+      try {
+        const res = await fetch(`/api/v1/vendors/${vendorId}/deactivate`, {
+          method: "POST",
+          headers: getHeaders()
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Vendor deactivated.");
+        await loadVendors();
+      } catch (err) {
+        showToast("Error: " + err.message);
+      }
+    }
+
+    async function loadBills() {
+      if (!currentOrgId) return;
+      try {
+        const res = await fetch("/api/v1/bills", { headers: getHeaders() });
+        cachedBills = await res.json();
+        renderBillsTable(cachedBills);
+      } catch (e) {
+        console.error("Bills load error:", e);
+      }
+    }
+
+    function renderBillsTable(bills) {
+      const tbody = document.querySelector("#tbl-bills tbody");
+      if (!bills || bills.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">No purchase bills found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = bills.map(b => {
+        const total = parseFloat(b.total_amount);
+        const settled = parseFloat(b.settled_amount || b.paid_amount || 0);
+        const vendorName = cachedVendors.find(v => v.id === b.vendor_id)?.display_name || b.vendor_id.substring(0, 8);
+
+        return `
+          <tr>
+            <td class="td-mono"><strong>${b.bill_number || 'DRAFT'}</strong></td>
+            <td>${vendorName}</td>
+            <td class="td-mono">${b.vendor_invoice_number}</td>
+            <td class="td-mono">${b.bill_date}</td>
+            <td class="td-mono">${b.due_date}</td>
+            <td class="td-num">$${total.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+            <td class="td-num" style="color: var(--primary);">$${settled.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+            <td style="text-align: center;"><span class="badge badge-${b.state}">${b.state}</span></td>
+            <td style="text-align: center; white-space: nowrap;">
+              ${b.state === 'draft' ? `<button class="btn btn-primary btn-sm" onclick="postBill('${b.id}')">Post (JP-07)</button>` : ''}
+              ${b.state === 'posted' ? `<button class="btn btn-secondary btn-sm" style="color: var(--danger); font-size: 11px;" onclick="voidBill('${b.id}')">Void (JP-08)</button>` : ''}
+              ${b.post_journal_id ? `<button class="btn btn-secondary btn-sm" onclick="inspectJournal('${b.post_journal_id}')">📖 JP-07</button>` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function showNewBillModal() {
+      // Populate tax rate dropdown
+      const taxSelect = document.getElementById("bill-line-tax");
+      if (taxSelect && cachedTaxRates) {
+        taxSelect.innerHTML = '<option value="">No Tax (0%)</option>' + cachedTaxRates.map(t => `
+          <option value="${t.id}">${t.name} (${parseFloat(t.rate_percent)}%)</option>
+        `).join('');
+      }
+      document.getElementById("modal-bill").classList.add("active");
+    }
+
+    async function handleCreateBill(e) {
+      e.preventDefault();
+      const vendorId = document.getElementById("bill-vendor-select").value;
+      const invNum = document.getElementById("bill-inv-num").value.trim();
+      const billDate = document.getElementById("bill-date").value;
+      const dueDate = document.getElementById("bill-due-date").value;
+      const desc = document.getElementById("bill-line-desc").value.trim();
+      const qty = parseFloat(document.getElementById("bill-line-qty").value);
+      const price = parseFloat(document.getElementById("bill-line-price").value);
+      const taxRateId = document.getElementById("bill-line-tax").value || null;
+      const notes = document.getElementById("bill-notes").value.trim() || null;
+
+      const expenseAcc = cachedAccounts.find(a => a.system_key === "general_expense") || cachedAccounts.find(a => a.account_type === "expense");
+
+      const payload = {
+        vendor_id: vendorId,
+        vendor_invoice_number: invNum,
+        bill_date: billDate,
+        due_date: dueDate,
+        notes: notes,
+        lines: [
+          {
+            description: desc,
+            quantity: qty,
+            unit_price: price,
+            tax_rate_id: taxRateId,
+            expense_account_id: expenseAcc ? expenseAcc.id : null
+          }
+        ]
+      };
+
+      try {
+        const res = await fetch("/api/v1/bills", {
+          method: "POST",
+          headers: getHeaders(),
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Draft purchase bill created!");
+        closeModal("modal-bill");
+        await loadBills();
+      } catch (err) {
+        showToast("Error creating bill: " + err.message);
+      }
+    }
+
+    async function postBill(billId) {
+      try {
+        const res = await fetch(`/api/v1/bills/${billId}/post`, {
+          method: "POST",
+          headers: getHeaders()
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Bill posted to General Ledger (JP-07)!");
+        await loadAllData();
+      } catch (err) {
+        showToast("Error posting bill: " + err.message);
+      }
+    }
+
+    async function voidBill(billId) {
+      const reason = prompt("Enter reason for voiding this posted bill:");
+      if (!reason) return;
+      try {
+        const res = await fetch(`/api/v1/bills/${billId}/void`, {
+          method: "POST",
+          headers: getHeaders(),
+          body: JSON.stringify({ reason })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Bill voided and reversal journal (JP-08) posted!");
+        await loadAllData();
+      } catch (err) {
+        showToast("Error voiding bill: " + err.message);
+      }
+    }
+
+    // =========================================================================
+    // MILESTONE 3: DIRECT EXPENSES (JP-11 / JP-12)
+    // =========================================================================
+    async function loadExpenses() {
+      if (!currentOrgId) return;
+      try {
+        const res = await fetch("/api/v1/expenses", { headers: getHeaders() });
+        cachedExpenses = await res.json();
+        renderExpensesTable(cachedExpenses);
+      } catch (e) {
+        console.error("Expenses load error:", e);
+      }
+    }
+
+    function renderExpensesTable(expenses) {
+      const tbody = document.querySelector("#tbl-expenses tbody");
+      if (!expenses || expenses.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;">No direct expenses recorded yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = expenses.map(exp => {
+        const expAcc = cachedAccounts.find(a => a.id === exp.expense_account_id)?.name || exp.expense_account_id.substring(0, 8);
+        const payAcc = cachedAccounts.find(a => a.id === exp.payment_account_id)?.name || exp.payment_account_id.substring(0, 8);
+        const net = parseFloat(exp.net_amount);
+        const tax = parseFloat(exp.tax_amount || 0);
+        const total = parseFloat(exp.total_amount);
+
+        return `
+          <tr>
+            <td class="td-mono">${exp.expense_date}</td>
+            <td><strong>${expAcc}</strong></td>
+            <td>${payAcc}</td>
+            <td>${exp.description}</td>
+            <td class="td-num">$${net.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+            <td class="td-num">$${tax.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+            <td class="td-num" style="font-weight: 700; color: var(--danger);">$${total.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+            <td><span class="badge badge-${exp.payment_status}">${exp.payment_status}</span></td>
+            <td class="td-mono" style="color: var(--text-muted);">${exp.reference || '—'}</td>
+            <td style="text-align: center; white-space: nowrap;">
+              ${exp.payment_status === 'posted' ? `<button class="btn btn-secondary btn-sm" style="color: var(--danger); font-size: 11px;" onclick="voidExpense('${exp.id}')">Void (JP-12)</button>` : ''}
+              ${exp.posting_journal_id ? `<button class="btn btn-secondary btn-sm" onclick="inspectJournal('${exp.posting_journal_id}')">📖 JP-11</button>` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function showNewExpenseModal() {
+      // Populate Expense Account select (Expense 5xxx / 6xxx)
+      const expAccSelect = document.getElementById("exp-account-select");
+      const expenseAccounts = cachedAccounts.filter(a => a.account_type === "expense" && a.is_postable);
+      expAccSelect.innerHTML = '<option value="">Select Expense Account...</option>' + expenseAccounts.map(a => `
+        <option value="${a.id}">${a.code} - ${a.name}</option>
+      `).join('');
+
+      // Populate Payment Account select (Bank 1020 / Cash 1010)
+      const payAccSelect = document.getElementById("exp-payment-account-select");
+      const paymentAccounts = cachedAccounts.filter(a => a.system_key === "bank" || a.system_key === "cash" || a.code === "1020" || a.code === "1010");
+      payAccSelect.innerHTML = '<option value="">Select Bank / Cash...</option>' + paymentAccounts.map(a => `
+        <option value="${a.id}">${a.code} - ${a.name}</option>
+      `).join('');
+
+      // Tax rate
+      const taxSelect = document.getElementById("exp-tax-select");
+      if (taxSelect && cachedTaxRates) {
+        taxSelect.innerHTML = '<option value="">No Tax (0%)</option>' + cachedTaxRates.map(t => `
+          <option value="${t.id}">${t.name} (${parseFloat(t.rate_percent)}%)</option>
+        `).join('');
+      }
+
+      document.getElementById("modal-expense").classList.add("active");
+    }
+
+    async function handleCreateExpense(e) {
+      e.preventDefault();
+      const payload = {
+        expense_account_id: document.getElementById("exp-account-select").value,
+        payment_account_id: document.getElementById("exp-payment-account-select").value,
+        expense_date: document.getElementById("exp-date").value,
+        description: document.getElementById("exp-desc").value.trim(),
+        net_amount: parseFloat(document.getElementById("exp-amount").value),
+        tax_rate_id: document.getElementById("exp-tax-select").value || null,
+        reference: document.getElementById("exp-ref").value.trim() || null
+      };
+
+      try {
+        const res = await fetch("/api/v1/expenses", {
+          method: "POST",
+          headers: getHeaders(),
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Direct expense posted (JP-11)!");
+        closeModal("modal-expense");
+        await loadAllData();
+      } catch (err) {
+        showToast("Error creating expense: " + err.message);
+      }
+    }
+
+    async function voidExpense(expenseId) {
+      const reason = prompt("Enter reason for voiding this expense:");
+      if (!reason) return;
+      try {
+        const res = await fetch(`/api/v1/expenses/${expenseId}/void`, {
+          method: "POST",
+          headers: getHeaders(),
+          body: JSON.stringify({ reason })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Expense voided and reversal (JP-12) posted!");
+        await loadAllData();
+      } catch (err) {
+        showToast("Error voiding expense: " + err.message);
+      }
+    }
+
+    // =========================================================================
+    // MILESTONE 4: SUPPLIER PAYMENTS (JP-09 / JP-10)
+    // =========================================================================
+    async function loadSupplierPayments() {
+      if (!currentOrgId) return;
+      try {
+        const res = await fetch("/api/v1/supplier-payments", { headers: getHeaders() });
+        cachedSupplierPayments = await res.json();
+        renderSupplierPaymentsTable(cachedSupplierPayments);
+      } catch (e) {
+        console.error("Supplier payments load error:", e);
+      }
+    }
+
+    function renderSupplierPaymentsTable(payments) {
+      const tbody = document.querySelector("#tbl-supplier-payments tbody");
+      if (!payments || payments.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No supplier payments recorded.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = payments.map(p => {
+        const vendorName = cachedVendors.find(v => v.id === p.vendor_id)?.display_name || p.vendor_id.substring(0, 8);
+        const amt = parseFloat(p.amount);
+
+        return `
+          <tr>
+            <td class="td-mono">${p.payment_date}</td>
+            <td><strong>${vendorName}</strong></td>
+            <td style="text-transform: capitalize;">${p.method.replace('_', ' ')}</td>
+            <td class="td-mono">${p.reference || '—'}</td>
+            <td class="td-num" style="font-weight: 700; color: var(--primary);">$${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+            <td style="text-align: center;"><span class="badge ${p.status === 'posted' ? 'badge-posted' : 'badge-reversed'}">${p.status}</span></td>
+            <td style="text-align: center; white-space: nowrap;">
+              ${p.status === 'posted' ? `<button class="btn btn-secondary btn-sm" style="color: var(--danger); font-size: 11px;" onclick="reverseSupplierPayment('${p.id}')">Reverse (JP-10)</button>` : ''}
+              ${p.journal_id ? `<button class="btn btn-secondary btn-sm" onclick="inspectJournal('${p.journal_id}')">📖 JP-09</button>` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function showNewSupplierPaymentModal() {
+      populateVendorDropdowns(cachedVendors);
+      document.getElementById("modal-supplier-payment").classList.add("active");
+    }
+
+    function handleSupplierPaymentVendorChange() {
+      const vendorId = document.getElementById("spay-vendor-select").value;
+      const tbody = document.querySelector("#tbl-spay-allocations tbody");
+      if (!vendorId) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Select a vendor to see eligible bills.</td></tr>';
+        return;
+      }
+
+      const openBills = cachedBills.filter(b => b.vendor_id === vendorId && b.state === "posted" && (parseFloat(b.total_amount) - parseFloat(b.settled_amount || b.paid_amount || 0)) > 0);
+      if (openBills.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-muted);">No unpaid posted bills found for this vendor.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = openBills.map(b => {
+        const total = parseFloat(b.total_amount);
+        const settled = parseFloat(b.settled_amount || b.paid_amount || 0);
+        const outstanding = total - settled;
+
+        return `
+          <tr>
+            <td class="td-mono">${b.bill_number}</td>
+            <td class="td-mono">${b.vendor_invoice_number}</td>
+            <td class="td-num">$${total.toFixed(2)}</td>
+            <td class="td-num" style="font-weight: 600; color: var(--warning);">$${outstanding.toFixed(2)}</td>
+            <td style="text-align: right;">
+              <input type="number" class="form-control spay-alloc-input" data-bill-id="${b.id}" data-max="${outstanding}" step="0.0001" min="0" max="${outstanding}" placeholder="0.00" style="text-align: right; width: 120px;" oninput="updateSupplierPaymentTotal()">
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function updateSupplierPaymentTotal() {
+      let total = 0;
+      document.querySelectorAll(".spay-alloc-input").forEach(input => {
+        const val = parseFloat(input.value) || 0;
+        total += val;
+      });
+      document.getElementById("spay-amount").value = total > 0 ? total.toFixed(4) : "";
+    }
+
+    async function handleCreateSupplierPayment(e) {
+      e.preventDefault();
+      const vendorId = document.getElementById("spay-vendor-select").value;
+      const paymentDate = document.getElementById("spay-date").value;
+      const method = document.getElementById("spay-method").value;
+      const ref = document.getElementById("spay-ref").value.trim() || null;
+      const totalAmount = parseFloat(document.getElementById("spay-amount").value);
+
+      const allocations = [];
+      document.querySelectorAll(".spay-alloc-input").forEach(input => {
+        const amt = parseFloat(input.value) || 0;
+        if (amt > 0) {
+          allocations.push({
+            bill_id: input.getAttribute("data-bill-id"),
+            amount: amt
+          });
+        }
+      });
+
+      if (allocations.length === 0) {
+        alert("Please allocate an amount to at least one eligible bill.");
+        return;
+      }
+
+      const payload = {
+        vendor_id: vendorId,
+        payment_date: paymentDate,
+        amount: totalAmount,
+        method: method,
+        reference: ref,
+        allocations: allocations
+      };
+
+      try {
+        const res = await fetch("/api/v1/supplier-payments", {
+          method: "POST",
+          headers: getHeaders(),
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Supplier payment and bill allocations posted (JP-09)!");
+        closeModal("modal-supplier-payment");
+        await loadAllData();
+      } catch (err) {
+        showToast("Payment error: " + err.message);
+      }
+    }
+
+    async function reverseSupplierPayment(paymentId) {
+      const reason = prompt("Enter reason for reversing this supplier payment:");
+      if (!reason) return;
+      try {
+        const res = await fetch(`/api/v1/supplier-payments/${paymentId}/reverse`, {
+          method: "POST",
+          headers: getHeaders(),
+          body: JSON.stringify({ reason })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Payment reversed and reversal journal (JP-10) posted!");
+        await loadAllData();
+      } catch (err) {
+        showToast("Reversal error: " + err.message);
+      }
+    }
+
+    // =========================================================================
+    // MILESTONE 5: CREDIT NOTES (JP-05 / JP-06)
+    // =========================================================================
+    async function loadCreditNotes() {
+      if (!currentOrgId) return;
+      try {
+        const res = await fetch("/api/v1/credit-notes", { headers: getHeaders() });
+        cachedCreditNotes = await res.json();
+        renderCreditNotesTable(cachedCreditNotes);
+      } catch (e) {
+        console.error("Credit notes load error:", e);
+      }
+    }
+
+    function renderCreditNotesTable(creditNotes) {
+      const tbody = document.querySelector("#tbl-credit-notes tbody");
+      if (!creditNotes || creditNotes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No sales credit notes found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = creditNotes.map(cn => {
+        const custName = cachedCustomers.find(c => c.id === cn.customer_id)?.display_name || cn.customer_id.substring(0, 8);
+        const invNum = cachedInvoices.find(i => i.id === cn.invoice_id)?.invoice_number || cn.invoice_id.substring(0, 8);
+        const total = parseFloat(cn.total_amount);
+
+        return `
+          <tr>
+            <td class="td-mono"><strong>${cn.credit_note_number || 'DRAFT'}</strong></td>
+            <td>${custName}</td>
+            <td class="td-mono">${invNum}</td>
+            <td class="td-mono">${cn.credit_note_date}</td>
+            <td class="td-num" style="font-weight: 700; color: var(--warning);">$${total.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+            <td style="text-align: center;"><span class="badge badge-${cn.state}">${cn.state}</span></td>
+            <td style="text-align: center; white-space: nowrap;">
+              ${cn.state === 'draft' ? `<button class="btn btn-primary btn-sm" onclick="issueCreditNote('${cn.id}')">Issue (JP-05)</button>` : ''}
+              ${cn.state === 'issued' ? `<button class="btn btn-secondary btn-sm" style="color: var(--danger); font-size: 11px;" onclick="voidCreditNote('${cn.id}')">Void (JP-06)</button>` : ''}
+              ${cn.issue_journal_id ? `<button class="btn btn-secondary btn-sm" onclick="inspectJournal('${cn.issue_journal_id}')">📖 JP-05</button>` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function showNewCreditNoteModal() {
+      // Populate issued invoices dropdown
+      const invSelect = document.getElementById("cn-invoice-select");
+      const issuedInvoices = cachedInvoices.filter(i => i.state === "issued" && (parseFloat(i.total_amount) - parseFloat(i.credit_noted_amount || 0)) > 0);
+      invSelect.innerHTML = '<option value="">Select Invoice...</option>' + issuedInvoices.map(i => {
+        const cust = cachedCustomers.find(c => c.id === i.customer_id)?.display_name || "";
+        const maxAvail = parseFloat(i.total_amount) - parseFloat(i.credit_noted_amount || 0);
+        return `<option value="${i.id}">${i.invoice_number} - ${cust} (Avail Credit: $${maxAvail.toFixed(2)})</option>`;
+      }).join('');
+
+      // Tax rate
+      const taxSelect = document.getElementById("cn-line-tax");
+      if (taxSelect && cachedTaxRates) {
+        taxSelect.innerHTML = '<option value="">No Tax (0%)</option>' + cachedTaxRates.map(t => `
+          <option value="${t.id}">${t.name} (${parseFloat(t.rate_percent)}%)</option>
+        `).join('');
+      }
+
+      document.getElementById("modal-credit-note").classList.add("active");
+    }
+
+    function handleCreditNoteInvoiceChange() {
+      // hook if needed
+    }
+
+    async function handleCreateCreditNote(e) {
+      e.preventDefault();
+      const invoiceId = document.getElementById("cn-invoice-select").value;
+      const cnDate = document.getElementById("cn-date").value;
+      const reason = document.getElementById("cn-reason").value.trim();
+      const desc = document.getElementById("cn-line-desc").value.trim();
+      const qty = parseFloat(document.getElementById("cn-line-qty").value);
+      const price = parseFloat(document.getElementById("cn-line-price").value);
+      const taxRateId = document.getElementById("cn-line-tax").value || null;
+
+      const salesAccount = cachedAccounts.find(a => a.system_key === "sales_income");
+
+      const payload = {
+        invoice_id: invoiceId,
+        credit_note_date: cnDate,
+        reason: reason,
+        lines: [
+          {
+            description: desc,
+            quantity: qty,
+            unit_price: price,
+            tax_rate_id: taxRateId,
+            income_account_id: salesAccount ? salesAccount.id : null
+          }
+        ]
+      };
+
+      try {
+        const res = await fetch("/api/v1/credit-notes", {
+          method: "POST",
+          headers: getHeaders(),
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Draft credit note created!");
+        closeModal("modal-credit-note");
+        await loadCreditNotes();
+      } catch (err) {
+        showToast("Credit note error: " + err.message);
+      }
+    }
+
+    async function issueCreditNote(creditNoteId) {
+      try {
+        const res = await fetch(`/api/v1/credit-notes/${creditNoteId}/issue`, {
+          method: "POST",
+          headers: getHeaders()
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Credit note issued & JP-05 journal posted!");
+        await loadAllData();
+      } catch (err) {
+        showToast("Error issuing credit note: " + err.message);
+      }
+    }
+
+    async function voidCreditNote(creditNoteId) {
+      const reason = prompt("Enter reason for voiding this credit note:");
+      if (!reason) return;
+      try {
+        const res = await fetch(`/api/v1/credit-notes/${creditNoteId}/void`, {
+          method: "POST",
+          headers: getHeaders(),
+          body: JSON.stringify({ reason })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Credit note voided and reversal (JP-06) posted!");
+        await loadAllData();
+      } catch (err) {
+        showToast("Error voiding credit note: " + err.message);
+      }
+    }
+
+    // =========================================================================
+    // MILESTONE 7: EXTENDED FINANCIAL REPORTS
+    // =========================================================================
+    async function loadAPSummary() {
+      if (!currentOrgId) return;
+      try {
+        const res = await fetch("/api/v1/reports/ap-summary", { headers: getHeaders() });
+        const ap = await res.json();
+        renderAPSummary(ap);
+
+        // Update KPI
+        const apKpi = document.getElementById("kpi-ap-outstanding");
+        if (apKpi) {
+          apKpi.innerText = `$${parseFloat(ap.total_outstanding || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+        }
+      } catch (e) {
+        console.error("AP summary load error:", e);
+      }
+    }
+
+    function renderAPSummary(ap) {
+      const tbody = document.querySelector("#tbl-ap-summary tbody");
+      if (!ap.vendors || ap.vendors.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No accounts payable outstanding.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = ap.vendors.map(v => `
+        <tr>
+          <td><strong>${v.vendor_name}</strong></td>
+          <td class="td-num">$${parseFloat(v.total_billed).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+          <td class="td-num" style="color: var(--primary);">$${parseFloat(v.total_paid).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+          <td class="td-num">$${parseFloat(v.current_amount).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+          <td class="td-num">$${parseFloat(v.overdue_1_30).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+          <td class="td-num">$${parseFloat(v.overdue_31_60).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+          <td class="td-num">$${parseFloat(v.overdue_90_plus).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+          <td class="td-num" style="font-weight: 700; color: var(--danger);">$${parseFloat(v.outstanding_balance).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+        </tr>
+      `).join('');
+
+      const banner = document.getElementById("banner-ap-reconciled");
+      if (ap.is_reconciled) {
+        banner.className = "banner-reconciled";
+        document.getElementById("ap-recon-title").innerText = "AP Sub-ledger to General Ledger 100% Reconciled";
+        document.getElementById("ap-recon-desc").innerText = `Sub-ledger Total ($${parseFloat(ap.total_outstanding).toLocaleString('en-US', {minimumFractionDigits: 2})}) exactly equals General Ledger Control Account 2010 ($${parseFloat(ap.gl_control_account_balance).toLocaleString('en-US', {minimumFractionDigits: 2})}).`;
+      } else {
+        banner.className = "banner-alert";
+        document.getElementById("ap-recon-title").innerText = "AP Sub-ledger vs GL Discrepancy";
+        document.getElementById("ap-recon-desc").innerText = `Sub-ledger: $${ap.total_outstanding} vs GL 2010: $${ap.gl_control_account_balance}`;
+      }
+    }
+
+    async function loadProfitAndLoss() {
+      if (!currentOrgId) return;
+      try {
+        const res = await fetch("/api/v1/reports/profit-and-loss", { headers: getHeaders() });
+        const pl = await res.json();
+        renderProfitAndLoss(pl);
+      } catch (e) {
+        console.error("P&L load error:", e);
+      }
+    }
+
+    function renderProfitAndLoss(pl) {
+      const tbody = document.getElementById("pl-report-body");
+      let rows = `
+        <tr style="background: rgba(31, 41, 55, 0.4);"><td colspan="3"><strong>OPERATING REVENUE</strong></td></tr>
+      `;
+      (pl.revenue_accounts || []).forEach(a => {
+        rows += `<tr><td class="td-mono">${a.account_code}</td><td>${a.account_name}</td><td class="td-num">$${parseFloat(a.amount).toFixed(2)}</td></tr>`;
+      });
+      rows += `<tr style="font-weight: 700; color: var(--primary);"><td colspan="2">TOTAL REVENUE:</td><td class="td-num">$${parseFloat(pl.total_revenue).toFixed(2)}</td></tr>`;
+
+      rows += `<tr style="background: rgba(31, 41, 55, 0.4);"><td colspan="3"><strong>COST OF GOODS SOLD</strong></td></tr>`;
+      (pl.cogs_accounts || []).forEach(a => {
+        rows += `<tr><td class="td-mono">${a.account_code}</td><td>${a.account_name}</td><td class="td-num">$${parseFloat(a.amount).toFixed(2)}</td></tr>`;
+      });
+      rows += `<tr style="font-weight: 700;"><td colspan="2">TOTAL COGS:</td><td class="td-num">$${parseFloat(pl.total_cogs).toFixed(2)}</td></tr>`;
+      rows += `<tr style="font-weight: 700; color: var(--cyan);"><td colspan="2">GROSS PROFIT:</td><td class="td-num">$${parseFloat(pl.gross_profit).toFixed(2)}</td></tr>`;
+
+      rows += `<tr style="background: rgba(31, 41, 55, 0.4);"><td colspan="3"><strong>OPERATING EXPENSES</strong></td></tr>`;
+      (pl.expense_accounts || []).forEach(a => {
+        rows += `<tr><td class="td-mono">${a.account_code}</td><td>${a.account_name}</td><td class="td-num">$${parseFloat(a.amount).toFixed(2)}</td></tr>`;
+      });
+      rows += `<tr style="font-weight: 700; color: var(--danger);"><td colspan="2">TOTAL EXPENSES:</td><td class="td-num">$${parseFloat(pl.total_expenses).toFixed(2)}</td></tr>`;
+
+      rows += `
+        <tr style="background: rgba(16, 185, 129, 0.15); font-weight: 700; font-size: 14px;">
+          <td colspan="2" style="color: var(--primary);">NET OPERATING INCOME (EARNINGS):</td>
+          <td class="td-num" style="color: var(--primary);">$${parseFloat(pl.net_profit).toFixed(2)}</td>
+        </tr>
+      `;
+      tbody.innerHTML = rows;
+    }
+
+    async function loadBalanceSheet() {
+      if (!currentOrgId) return;
+      try {
+        const res = await fetch("/api/v1/reports/balance-sheet", { headers: getHeaders() });
+        const bs = await res.json();
+        renderBalanceSheet(bs);
+      } catch (e) {
+        console.error("Balance Sheet load error:", e);
+      }
+    }
+
+    function renderBalanceSheet(bs) {
+      const tbody = document.getElementById("bs-report-body");
+      let rows = `
+        <tr style="background: rgba(31, 41, 55, 0.4);"><td colspan="3"><strong>ASSETS (1xxx)</strong></td></tr>
+      `;
+      (bs.asset_accounts || []).forEach(a => {
+        rows += `<tr><td class="td-mono">${a.account_code}</td><td>${a.account_name}</td><td class="td-num">$${parseFloat(a.amount).toFixed(2)}</td></tr>`;
+      });
+      rows += `<tr style="font-weight: 700; color: var(--cyan);"><td colspan="2">TOTAL ASSETS:</td><td class="td-num">$${parseFloat(bs.total_assets).toFixed(2)}</td></tr>`;
+
+      rows += `<tr style="background: rgba(31, 41, 55, 0.4);"><td colspan="3"><strong>LIABILITIES (2xxx)</strong></td></tr>`;
+      (bs.liability_accounts || []).forEach(a => {
+        rows += `<tr><td class="td-mono">${a.account_code}</td><td>${a.account_name}</td><td class="td-num">$${parseFloat(a.amount).toFixed(2)}</td></tr>`;
+      });
+      rows += `<tr style="font-weight: 700; color: var(--warning);"><td colspan="2">TOTAL LIABILITIES:</td><td class="td-num">$${parseFloat(bs.total_liabilities).toFixed(2)}</td></tr>`;
+
+      rows += `<tr style="background: rgba(31, 41, 55, 0.4);"><td colspan="3"><strong>EQUITY (3xxx)</strong></td></tr>`;
+      (bs.equity_accounts || []).forEach(a => {
+        rows += `<tr><td class="td-mono">${a.account_code}</td><td>${a.account_name}</td><td class="td-num">$${parseFloat(a.amount).toFixed(2)}</td></tr>`;
+      });
+      rows += `<tr><td class="td-mono">—</td><td>Current Year Net Earnings (P&L Retained)</td><td class="td-num">$${parseFloat(bs.current_year_earnings).toFixed(2)}</td></tr>`;
+      rows += `<tr style="font-weight: 700;"><td colspan="2">TOTAL EQUITY:</td><td class="td-num">$${parseFloat(bs.total_equity).toFixed(2)}</td></tr>`;
+
+      rows += `
+        <tr style="background: rgba(16, 185, 129, 0.15); font-weight: 700; font-size: 14px;">
+          <td colspan="2">TOTAL LIABILITIES & EQUITY:</td>
+          <td class="td-num" style="color: var(--primary);">$${parseFloat(bs.total_liabilities_and_equity).toFixed(2)}</td>
+        </tr>
+      `;
+      tbody.innerHTML = rows;
+    }
+
+    async function loadGeneralLedger() {
+      if (!currentOrgId) return;
+      try {
+        const accSelect = document.getElementById("gl-account-filter");
+        if (accSelect.options.length <= 1 && cachedAccounts) {
+          cachedAccounts.forEach(a => {
+            const opt = document.createElement("option");
+            opt.value = a.id;
+            opt.text = `${a.code} - ${a.name}`;
+            accSelect.appendChild(opt);
+          });
+        }
+
+        const filterAccId = accSelect.value;
+        let url = "/api/v1/reports/general-ledger";
+        if (filterAccId) url += `?account_id=${filterAccId}`;
+
+        const res = await fetch(url, { headers: getHeaders() });
+        const gl = await res.json();
+        renderGeneralLedger(gl);
+      } catch (e) {
+        console.error("General ledger load error:", e);
+      }
+    }
+
+    function renderGeneralLedger(gl) {
+      const tbody = document.getElementById("gl-report-body");
+      if (!gl.accounts || gl.accounts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No general ledger records found.</td></tr>';
+        return;
+      }
+
+      let rows = "";
+      gl.accounts.forEach(acc => {
+        rows += `
+          <tr style="background: rgba(31, 41, 55, 0.6); font-weight: 700;">
+            <td colspan="5"><span class="td-mono">${acc.account_code}</span> — ${acc.account_name} (${acc.account_type.toUpperCase()})</td>
+            <td colspan="3" style="text-align: right; color: var(--text-muted); font-size: 11px;">Opening Balance: $${parseFloat(acc.opening_balance).toFixed(2)}</td>
+          </tr>
+        `;
+        if (acc.transactions && acc.transactions.length > 0) {
+          acc.transactions.forEach(t => {
+            rows += `
+              <tr>
+                <td class="td-mono">${t.date}</td>
+                <td><span style="font-size: 11px; color: var(--text-muted);">${acc.account_code}</span></td>
+                <td class="td-mono" style="color: var(--indigo);">${t.journal_number || '—'}</td>
+                <td style="text-transform: capitalize;">${t.source_type}</td>
+                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${t.description || t.memo || '—'}</td>
+                <td class="td-num">${parseFloat(t.debit) > 0 ? `$${parseFloat(t.debit).toFixed(2)}` : '—'}</td>
+                <td class="td-num">${parseFloat(t.credit) > 0 ? `$${parseFloat(t.credit).toFixed(2)}` : '—'}</td>
+                <td class="td-num" style="font-weight: 600;">$${parseFloat(t.running_balance).toFixed(2)}</td>
+              </tr>
+            `;
+          });
+        } else {
+          rows += `<tr><td colspan="8" style="text-align:center; color: var(--text-muted); font-size: 11px;">No transactions in period.</td></tr>`;
+        }
+        rows += `
+          <tr style="font-weight: 700; border-bottom: 2px solid var(--border-color); background: rgba(17, 24, 39, 0.4);">
+            <td colspan="5" style="text-align: right;">ACCOUNT CLOSING BALANCE:</td>
+            <td class="td-num">$${parseFloat(acc.total_debit).toFixed(2)}</td>
+            <td class="td-num">$${parseFloat(acc.total_credit).toFixed(2)}</td>
+            <td class="td-num" style="color: var(--primary); font-size: 13px;">$${parseFloat(acc.closing_balance).toFixed(2)}</td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = rows;
+    }
+
   </script>
 </body>
 </html>

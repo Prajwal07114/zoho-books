@@ -40,9 +40,21 @@ def create_application() -> FastAPI:
         allow_headers=["*"],
     )
 
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+    from app.services.posting_gateway import AccountingError
+
+    @app.exception_handler(AccountingError)
+    async def accounting_error_handler(request: Request, exc: AccountingError):
+        return JSONResponse(
+            status_code=400,
+            content={"detail": str(exc)},
+        )
+
     # Mount API routes
     app.include_router(api_router, prefix="/api/v1")
     app.include_router(api_router)  # Allow /health at root as well
+
 
     # Serve Demonstration Frontend at root
     import os

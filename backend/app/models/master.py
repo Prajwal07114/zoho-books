@@ -3,9 +3,9 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, text
-from sqlalchemy.dialects.postgresql import UUID
+from typing import Any, Dict, Optional
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, SmallInteger, String, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -32,6 +32,9 @@ class Contact(Base):
     is_customer: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_vendor: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[str] = mapped_column(String, default="active", nullable=False)
+    billing_address: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    tax_identifier: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    payment_terms_days: Mapped[Optional[int]] = mapped_column(SmallInteger, default=0, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.utcnow,

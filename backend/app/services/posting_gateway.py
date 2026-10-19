@@ -434,3 +434,507 @@ async def build_jp04_payment_reversal(
         created_by=created_by,
         lines=lines,
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 Journal Posting Templates (JP-05 through JP-14)
+# ---------------------------------------------------------------------------
+
+async def build_jp05_credit_note_issuance(
+    organization_id: uuid.UUID,
+    credit_note_id: uuid.UUID,
+    customer_id: uuid.UUID,
+    accounting_date: date,
+    net_amount: Decimal,
+    tax_amount: Decimal,
+    grand_total: Decimal,
+    ar_account_id: uuid.UUID,
+    sales_account_id: uuid.UUID,
+    tax_account_id: Optional[uuid.UUID],
+    created_by: uuid.UUID,
+    credit_note_number: Optional[str] = None,
+) -> PostingRequest:
+    """JP-05: Sales Credit Note Issuance.
+    Debit Sales Income (net_amount)
+    Debit Tax Payable (tax_amount, if tax > 0)
+    Credit Accounts Receivable (grand_total)
+    """
+    lines = [
+        PostingLine(
+            account_id=sales_account_id,
+            debit=net_amount,
+            credit=Decimal("0.0000"),
+            contact_id=customer_id,
+            description=f"Credit Note {credit_note_number or credit_note_id} revenue reduction",
+        )
+    ]
+
+    if tax_amount > Decimal("0.0000"):
+        if not tax_account_id:
+            raise AccountingError("Tax account ID is required when credit note has tax amount")
+        lines.append(
+            PostingLine(
+                account_id=tax_account_id,
+                debit=tax_amount,
+                credit=Decimal("0.0000"),
+                contact_id=customer_id,
+                description="Tax liability reduction",
+            )
+        )
+
+    lines.append(
+        PostingLine(
+            account_id=ar_account_id,
+            debit=Decimal("0.0000"),
+            credit=grand_total,
+            contact_id=customer_id,
+            description=f"Credit Note {credit_note_number or credit_note_id} receivable reduction",
+        )
+    )
+
+    return PostingRequest(
+        organization_id=organization_id,
+        accounting_date=accounting_date,
+        source_type="credit_note",
+        source_id=credit_note_id,
+        memo=f"Credit note issuance: {credit_note_number or credit_note_id}",
+        created_by=created_by,
+        lines=lines,
+    )
+
+
+async def build_jp06_credit_note_void(
+    organization_id: uuid.UUID,
+    credit_note_id: uuid.UUID,
+    customer_id: uuid.UUID,
+    accounting_date: date,
+    net_amount: Decimal,
+    tax_amount: Decimal,
+    grand_total: Decimal,
+    ar_account_id: uuid.UUID,
+    sales_account_id: uuid.UUID,
+    tax_account_id: Optional[uuid.UUID],
+    original_journal_id: uuid.UUID,
+    void_reason: str,
+    created_by: uuid.UUID,
+    credit_note_number: Optional[str] = None,
+) -> PostingRequest:
+    """JP-06: Sales Credit Note Void Reversal.
+    Debit Accounts Receivable (grand_total)
+    Credit Sales Income (net_amount)
+    Credit Tax Payable (tax_amount, if tax > 0)
+    """
+    lines = [
+        PostingLine(
+            account_id=ar_account_id,
+            debit=grand_total,
+            credit=Decimal("0.0000"),
+            contact_id=customer_id,
+            description=f"Void Credit Note {credit_note_number or credit_note_id} restore receivable",
+        ),
+        PostingLine(
+            account_id=sales_account_id,
+            debit=Decimal("0.0000"),
+            credit=net_amount,
+            contact_id=customer_id,
+            description="Revenue restoration",
+        ),
+    ]
+
+    if tax_amount > Decimal("0.0000"):
+        if not tax_account_id:
+            raise AccountingError("Tax account ID is required when reversing credit note tax")
+        lines.append(
+            PostingLine(
+                account_id=tax_account_id,
+                debit=Decimal("0.0000"),
+                credit=tax_amount,
+                contact_id=customer_id,
+                description="Tax liability restoration",
+            )
+        )
+
+    return PostingRequest(
+        organization_id=organization_id,
+        accounting_date=accounting_date,
+        source_type="credit_note_void",
+        source_id=credit_note_id,
+        memo=f"Void Credit Note: {credit_note_number or credit_note_id}",
+        reverses_journal_id=original_journal_id,
+        reason=void_reason,
+        created_by=created_by,
+        lines=lines,
+    )
+
+
+async def build_jp07_bill_posting(
+    organization_id: uuid.UUID,
+    bill_id: uuid.UUID,
+    vendor_id: uuid.UUID,
+    accounting_date: date,
+    lines_breakdown: List[tuple[uuid.UUID, Decimal, Optional[str]]],  # (account_id, debit_amount, description)
+    tax_amount: Decimal,
+    grand_total: Decimal,
+    ap_account_id: uuid.UUID,
+    tax_account_id: Optional[uuid.UUID],
+    created_by: uuid.UUID,
+    bill_number: Optional[str] = None,
+) -> PostingRequest:
+    """JP-07: Purchase Bill Posting.
+    Debit Expense/Asset accounts per line (debit_amount)
+    Debit Tax Payable / Input Tax (tax_amount, if tax > 0)
+    Credit Accounts Payable (grand_total)
+    """
+    posting_lines: List[PostingLine] = []
+
+    for acc_id, debit_amt, desc in lines_breakdown:
+        posting_lines.append(
+            PostingLine(
+                account_id=acc_id,
+                debit=debit_amt,
+                credit=Decimal("0.0000"),
+                contact_id=vendor_id,
+                description=desc or f"Bill {bill_number or bill_id} expense",
+            )
+        )
+
+    if tax_amount > Decimal("0.0000"):
+        if not tax_account_id:
+            raise AccountingError("Tax account ID is required when bill has tax amount")
+        posting_lines.append(
+            PostingLine(
+                account_id=tax_account_id,
+                debit=tax_amount,
+                credit=Decimal("0.0000"),
+                contact_id=vendor_id,
+                description="Input tax on purchases",
+            )
+        )
+
+    posting_lines.append(
+        PostingLine(
+            account_id=ap_account_id,
+            debit=Decimal("0.0000"),
+            credit=grand_total,
+            contact_id=vendor_id,
+            description=f"Bill {bill_number or bill_id} Accounts Payable",
+        )
+    )
+
+    return PostingRequest(
+        organization_id=organization_id,
+        accounting_date=accounting_date,
+        source_type="bill",
+        source_id=bill_id,
+        memo=f"Bill posting: {bill_number or bill_id}",
+        created_by=created_by,
+        lines=posting_lines,
+    )
+
+
+async def build_jp08_bill_void(
+    organization_id: uuid.UUID,
+    bill_id: uuid.UUID,
+    vendor_id: uuid.UUID,
+    accounting_date: date,
+    lines_breakdown: List[tuple[uuid.UUID, Decimal, Optional[str]]],
+    tax_amount: Decimal,
+    grand_total: Decimal,
+    ap_account_id: uuid.UUID,
+    tax_account_id: Optional[uuid.UUID],
+    original_journal_id: uuid.UUID,
+    void_reason: str,
+    created_by: uuid.UUID,
+    bill_number: Optional[str] = None,
+) -> PostingRequest:
+    """JP-08: Purchase Bill Void Reversal.
+    Debit Accounts Payable (grand_total)
+    Credit Expense/Asset accounts per line (debit_amount)
+    Credit Tax Payable / Input Tax (tax_amount, if tax > 0)
+    """
+    posting_lines: List[PostingLine] = [
+        PostingLine(
+            account_id=ap_account_id,
+            debit=grand_total,
+            credit=Decimal("0.0000"),
+            contact_id=vendor_id,
+            description=f"Void Bill {bill_number or bill_id} Accounts Payable reversal",
+        )
+    ]
+
+    for acc_id, credit_amt, desc in lines_breakdown:
+        posting_lines.append(
+            PostingLine(
+                account_id=acc_id,
+                debit=Decimal("0.0000"),
+                credit=credit_amt,
+                contact_id=vendor_id,
+                description=desc or f"Void Bill {bill_number or bill_id} expense reversal",
+            )
+        )
+
+    if tax_amount > Decimal("0.0000"):
+        if not tax_account_id:
+            raise AccountingError("Tax account ID is required when reversing bill tax")
+        posting_lines.append(
+            PostingLine(
+                account_id=tax_account_id,
+                debit=Decimal("0.0000"),
+                credit=tax_amount,
+                contact_id=vendor_id,
+                description="Input tax reversal",
+            )
+        )
+
+    return PostingRequest(
+        organization_id=organization_id,
+        accounting_date=accounting_date,
+        source_type="bill_void",
+        source_id=bill_id,
+        memo=f"Void Bill: {bill_number or bill_id}",
+        reverses_journal_id=original_journal_id,
+        reason=void_reason,
+        created_by=created_by,
+        lines=posting_lines,
+    )
+
+
+async def build_jp09_supplier_payment(
+    organization_id: uuid.UUID,
+    supplier_payment_id: uuid.UUID,
+    vendor_id: uuid.UUID,
+    accounting_date: date,
+    amount: Decimal,
+    payment_account_id: uuid.UUID,
+    ap_account_id: uuid.UUID,
+    created_by: uuid.UUID,
+    payment_reference: Optional[str] = None,
+) -> PostingRequest:
+    """JP-09: Supplier Payment.
+    Debit Accounts Payable (amount)
+    Credit Cash/Bank Account (amount)
+    """
+    lines = [
+        PostingLine(
+            account_id=ap_account_id,
+            debit=amount,
+            credit=Decimal("0.0000"),
+            contact_id=vendor_id,
+            description=f"Supplier payment {payment_reference or supplier_payment_id} AP reduction",
+        ),
+        PostingLine(
+            account_id=payment_account_id,
+            debit=Decimal("0.0000"),
+            credit=amount,
+            contact_id=vendor_id,
+            description=f"Supplier payment disbursement {payment_reference or supplier_payment_id}",
+        ),
+    ]
+
+    return PostingRequest(
+        organization_id=organization_id,
+        accounting_date=accounting_date,
+        source_type="bill_payment",
+        source_id=supplier_payment_id,
+        memo=f"Supplier payment: {payment_reference or supplier_payment_id}",
+        created_by=created_by,
+        lines=lines,
+    )
+
+
+async def build_jp10_supplier_payment_reversal(
+    organization_id: uuid.UUID,
+    supplier_payment_id: uuid.UUID,
+    vendor_id: uuid.UUID,
+    accounting_date: date,
+    amount: Decimal,
+    payment_account_id: uuid.UUID,
+    ap_account_id: uuid.UUID,
+    original_journal_id: uuid.UUID,
+    reversal_reason: str,
+    created_by: uuid.UUID,
+    payment_reference: Optional[str] = None,
+) -> PostingRequest:
+    """JP-10: Supplier Payment Reversal.
+    Debit Cash/Bank Account (amount)
+    Credit Accounts Payable (amount)
+    """
+    lines = [
+        PostingLine(
+            account_id=payment_account_id,
+            debit=amount,
+            credit=Decimal("0.0000"),
+            contact_id=vendor_id,
+            description=f"Supplier payment reversal {payment_reference or supplier_payment_id} restore funds",
+        ),
+        PostingLine(
+            account_id=ap_account_id,
+            debit=Decimal("0.0000"),
+            credit=amount,
+            contact_id=vendor_id,
+            description=f"Supplier payment reversal {payment_reference or supplier_payment_id} restore AP",
+        ),
+    ]
+
+    return PostingRequest(
+        organization_id=organization_id,
+        accounting_date=accounting_date,
+        source_type="bill_payment_reversal",
+        source_id=supplier_payment_id,
+        memo=f"Supplier payment reversal: {payment_reference or supplier_payment_id}",
+        reverses_journal_id=original_journal_id,
+        reason=reversal_reason,
+        created_by=created_by,
+        lines=lines,
+    )
+
+
+async def build_jp11_expense_posting(
+    organization_id: uuid.UUID,
+    expense_id: uuid.UUID,
+    vendor_id: Optional[uuid.UUID],
+    accounting_date: date,
+    net_amount: Decimal,
+    tax_amount: Decimal,
+    total_amount: Decimal,
+    expense_account_id: uuid.UUID,
+    payment_account_id: uuid.UUID,
+    tax_account_id: Optional[uuid.UUID],
+    created_by: uuid.UUID,
+    expense_number: Optional[str] = None,
+    description: Optional[str] = None,
+) -> PostingRequest:
+    """JP-11: Direct Expense Recording.
+    Debit Expense Account (net_amount)
+    Debit Tax Account (tax_amount, if tax > 0)
+    Credit Cash/Bank Account (total_amount)
+    """
+    lines = [
+        PostingLine(
+            account_id=expense_account_id,
+            debit=net_amount,
+            credit=Decimal("0.0000"),
+            contact_id=vendor_id,
+            description=description or f"Expense {expense_number or expense_id}",
+        )
+    ]
+
+    if tax_amount > Decimal("0.0000"):
+        if not tax_account_id:
+            raise AccountingError("Tax account ID is required when expense has tax amount")
+        lines.append(
+            PostingLine(
+                account_id=tax_account_id,
+                debit=tax_amount,
+                credit=Decimal("0.0000"),
+                contact_id=vendor_id,
+                description="Tax on expense",
+            )
+        )
+
+    lines.append(
+        PostingLine(
+            account_id=payment_account_id,
+            debit=Decimal("0.0000"),
+            credit=total_amount,
+            contact_id=vendor_id,
+            description=f"Expense disbursement {expense_number or expense_id}",
+        )
+    )
+
+    return PostingRequest(
+        organization_id=organization_id,
+        accounting_date=accounting_date,
+        source_type="expense",
+        source_id=expense_id,
+        memo=f"Expense: {expense_number or expense_id}",
+        created_by=created_by,
+        lines=lines,
+    )
+
+
+async def build_jp12_expense_reversal(
+    organization_id: uuid.UUID,
+    expense_id: uuid.UUID,
+    vendor_id: Optional[uuid.UUID],
+    accounting_date: date,
+    net_amount: Decimal,
+    tax_amount: Decimal,
+    total_amount: Decimal,
+    expense_account_id: uuid.UUID,
+    payment_account_id: uuid.UUID,
+    tax_account_id: Optional[uuid.UUID],
+    original_journal_id: uuid.UUID,
+    void_reason: str,
+    created_by: uuid.UUID,
+    expense_number: Optional[str] = None,
+) -> PostingRequest:
+    """JP-12: Direct Expense Reversal.
+    Debit Cash/Bank Account (total_amount)
+    Credit Expense Account (net_amount)
+    Credit Tax Account (tax_amount, if tax > 0)
+    """
+    lines = [
+        PostingLine(
+            account_id=payment_account_id,
+            debit=total_amount,
+            credit=Decimal("0.0000"),
+            contact_id=vendor_id,
+            description=f"Expense reversal {expense_number or expense_id} restore funds",
+        ),
+        PostingLine(
+            account_id=expense_account_id,
+            debit=Decimal("0.0000"),
+            credit=net_amount,
+            contact_id=vendor_id,
+            description=f"Expense reversal {expense_number or expense_id}",
+        ),
+    ]
+
+    if tax_amount > Decimal("0.0000"):
+        if not tax_account_id:
+            raise AccountingError("Tax account ID is required when reversing expense tax")
+        lines.append(
+            PostingLine(
+                account_id=tax_account_id,
+                debit=Decimal("0.0000"),
+                credit=tax_amount,
+                contact_id=vendor_id,
+                description="Tax on expense reversal",
+            )
+        )
+
+    return PostingRequest(
+        organization_id=organization_id,
+        accounting_date=accounting_date,
+        source_type="expense_reversal",
+        source_id=expense_id,
+        memo=f"Expense reversal: {expense_number or expense_id}",
+        reverses_journal_id=original_journal_id,
+        reason=void_reason,
+        created_by=created_by,
+        lines=lines,
+    )
+
+
+async def build_jp14_opening_balance(
+    organization_id: uuid.UUID,
+    batch_id: uuid.UUID,
+    accounting_date: date,
+    lines: List[PostingLine],
+    created_by: uuid.UUID,
+    memo: Optional[str] = None,
+) -> PostingRequest:
+    """JP-14: Opening Balance Batch Posting.
+    Emits balanced debits/credits across ledger accounts with net offset in Opening Balance Equity.
+    """
+    return PostingRequest(
+        organization_id=organization_id,
+        accounting_date=accounting_date,
+        source_type="opening_balance",
+        source_id=batch_id,
+        memo=memo or f"Opening balance batch: {batch_id}",
+        created_by=created_by,
+        lines=lines,
+    )
+

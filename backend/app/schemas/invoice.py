@@ -55,7 +55,9 @@ class InvoiceResponse(BaseModel):
     tax_amount: Decimal
     total_amount: Decimal
     settled_amount: Decimal
+    credit_noted_amount: Decimal = Decimal("0.0000")
     notes: Optional[str]
+
     terms: Optional[str]
     snapshot: Optional[dict]
     issued_at: Optional[datetime]
