@@ -474,6 +474,10 @@
     .badge-issued { background: rgba(59, 130, 246, 0.15); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.3); }
     .badge-settled { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }
     .badge-voided { background: rgba(239, 68, 68, 0.15); color: #F87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge-pending { background: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-processing { background: rgba(99, 102, 241, 0.15); color: #818CF8; border: 1px solid rgba(99, 102, 241, 0.3); }
+    .badge-sent { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-failed { background: rgba(239, 68, 68, 0.15); color: #F87171; border: 1px solid rgba(239, 68, 68, 0.3); }
 
     /* Forms */
     .form-grid {
@@ -664,6 +668,9 @@
     </button>
     <button class="nav-btn" id="nav-security" onclick="switchTab('security')">
       🛡️ 5. Multi-Tenant RLS Spike
+    </button>
+    <button class="nav-btn" id="nav-notifications" onclick="switchTab('notifications')">
+      🔔 6. Notifications & Outbox
     </button>
   </nav>
 
@@ -1070,7 +1077,159 @@
       </div>
     </section>
 
+    <!-- TAB 6: NOTIFICATIONS & AUTOMATION -->
+    <section id="tab-notifications" class="tab-pane">
+      <!-- Toolbar / Trigger Row -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="card-header" style="margin-bottom: 12px;">
+          <div>
+            <h2 class="card-title">🔔 Transactional Outbox & Background Processing</h2>
+            <div class="card-desc">Atomic notification queueing, bounded retry exponential backoff, dynamic PDF rendering, and reminder automation.</div>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn btn-primary btn-sm" id="btn-process-outbox" onclick="processNotificationBatch()">
+              🚀 Process Outbox Batch
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btn-scan-reminders" onclick="triggerReminderScan()">
+              ⏰ Run Reminder Scan
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="loadNotifications()">
+              🔄 Refresh Queue
+            </button>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 16px; align-items: center; margin-top: 12px; font-size: 12px; color: var(--text-muted);">
+          <span>Filter Status:</span>
+          <select id="notif-status-filter" class="form-control" style="width: auto; padding: 4px 10px; font-size: 12px;" onchange="loadNotifications()">
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="processing">Processing</option>
+            <option value="sent">Sent</option>
+            <option value="failed">Failed</option>
+          </select>
+          <span style="margin-left: auto; font-family: var(--font-mono); color: var(--text-subtle);">PostgreSQL `FOR UPDATE SKIP LOCKED` Worker Safe</span>
+        </div>
+      </div>
+
+      <!-- Outbox Queue Table -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="card-header">
+          <h3 class="card-title">📬 Outbox Queue & Delivery Log</h3>
+        </div>
+        <div class="table-container">
+          <table id="tbl-notifications">
+            <thead>
+              <tr>
+                <th>Event Type</th>
+                <th>Recipient</th>
+                <th>Subject</th>
+                <th style="text-align: center;">Attempts</th>
+                <th style="text-align: center;">Status</th>
+                <th>Scheduled / Sent</th>
+                <th>Created At</th>
+                <th style="text-align: center;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="8" style="text-align: center;">Loading outbox jobs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Reminder Policy Configuration -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">⚙️ Organization Reminder Policy</h3>
+            <div class="card-desc">Configurable automated stages for outstanding invoice payment reminders.</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="saveReminderPolicy()">
+            💾 Save Policy
+          </button>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Enable Automated Reminders</label>
+            <select id="pol-enabled" class="form-control">
+              <option value="true">Active (Enabled)</option>
+              <option value="false">Disabled</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Days Before Due Date</label>
+            <input type="number" id="pol-days-before" class="form-control" min="0" max="30" value="3">
+          </div>
+          <div class="form-group">
+            <label>Remind on Due Date</label>
+            <select id="pol-on-due" class="form-control">
+              <option value="true">Yes (Send on Due Date)</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Days After Due Date (First Overdue)</label>
+            <input type="number" id="pol-days-after" class="form-control" min="0" max="30" value="3">
+          </div>
+          <div class="form-group">
+            <label>Overdue Interval (Days)</label>
+            <input type="number" id="pol-interval" class="form-control" min="1" max="60" value="7">
+          </div>
+          <div class="form-group">
+            <label>Max Overdue Reminders</label>
+            <input type="number" id="pol-max-reminders" class="form-control" min="1" max="10" value="3">
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
+
+  <!-- Notification Inspection Modal -->
+  <div class="modal-backdrop" id="modal-notification">
+    <div class="modal-box" style="max-width: 850px;">
+      <button class="modal-close" onclick="closeModal('modal-notification')">&times;</button>
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+        <span style="font-size: 20px;">🔔</span>
+        <div>
+          <h2 style="font-size: 16px; font-weight: 700;" id="modal-notif-title">Notification Job Details</h2>
+          <div style="font-size: 11px; color: var(--text-muted);" id="modal-notif-subtitle">Authoritative transactional outbox record & attempt history</div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: rgba(31, 41, 55, 0.4); padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 12px;">
+        <div><span style="color: var(--text-muted);">Event Type:</span> <strong id="modal-notif-event" style="font-family: var(--font-mono);">-</strong></div>
+        <div><span style="color: var(--text-muted);">Status:</span> <strong id="modal-notif-status">-</strong></div>
+        <div><span style="color: var(--text-muted);">Attempts:</span> <strong id="modal-notif-attempts" style="font-family: var(--font-mono);">-</strong></div>
+        <div><span style="color: var(--text-muted);">Idempotency Key:</span> <strong id="modal-notif-idempotency" style="font-family: var(--font-mono); font-size: 10px;">-</strong></div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">DELIVERY ATTEMPTS HISTORY</div>
+        <div class="table-container">
+          <table id="tbl-modal-attempts">
+            <thead>
+              <tr>
+                <th>Attempt #</th>
+                <th>Status</th>
+                <th>Provider Msg ID</th>
+                <th>Attempted At</th>
+                <th>Error Details</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">PAYLOAD JSON (IMMUTABLE CAPTURE)</div>
+        <pre class="code-block" id="modal-notif-payload" style="max-height: 200px; overflow-y: auto; font-size: 11px;"></pre>
+      </div>
+    </div>
+  </div>
 
   <!-- Journal Inspection Modal -->
   <div class="modal-backdrop" id="modal-journal">
@@ -1213,6 +1372,7 @@
         loadInvoices(),
         loadPayments(),
         loadReports(),
+        loadNotifications(),
       ]);
     }
 
@@ -1228,6 +1388,7 @@
       if (tabName === "invoices") loadInvoices();
       if (tabName === "payments") loadPayments();
       if (tabName === "master") loadMasterData();
+      if (tabName === "notifications") loadNotifications();
     }
 
     // TAB 1: MASTER DATA
@@ -1693,6 +1854,181 @@
       } finally {
         btn.disabled = false;
         btn.innerHTML = "🛡️ Execute Live Cross-Tenant Attack Probe";
+      }
+    }
+
+    // TAB 6: NOTIFICATIONS & OUTBOX
+    let cachedNotifications = [];
+
+    async function loadNotifications() {
+      if (!currentOrgId) return;
+      try {
+        const filterVal = document.getElementById("notif-status-filter")?.value || "";
+        let url = "/api/v1/notifications?limit=50";
+        if (filterVal) url += `&status=${filterVal}`;
+
+        const res = await fetch(url, { headers: getHeaders() });
+        cachedNotifications = await res.json();
+        renderNotificationsTable(cachedNotifications);
+        await loadReminderPolicy();
+      } catch (e) {
+        console.error("Notifications load error:", e);
+      }
+    }
+
+    function renderNotificationsTable(jobs) {
+      const tbody = document.querySelector("#tbl-notifications tbody");
+      if (!jobs || jobs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No notification jobs found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = jobs.map(j => {
+        const attemptsStr = `${j.attempts_count} / ${j.max_attempts}`;
+        const scheduledOrSent = j.sent_at ? `<span style="color: var(--primary);">${j.sent_at.split('T')[1].substring(0, 8)}</span>` : (j.next_retry_at ? `<span style="color: var(--warning);">${j.next_retry_at.split('T')[1].substring(0, 8)}</span>` : '—');
+        const createdTime = j.created_at ? j.created_at.split('T')[1].substring(0, 8) : '—';
+
+        return `
+          <tr>
+            <td class="td-mono"><strong style="color: var(--indigo);">${j.event_type}</strong></td>
+            <td>${j.recipient_name || ''} &lt;${j.recipient_email}&gt;</td>
+            <td style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${j.subject}</td>
+            <td class="td-mono" style="text-align: center;">${attemptsStr}</td>
+            <td style="text-align: center;"><span class="badge badge-${j.status}">${j.status}</span></td>
+            <td class="td-mono">${scheduledOrSent}</td>
+            <td class="td-mono" style="color: var(--text-muted);">${createdTime}</td>
+            <td style="text-align: center; white-space: nowrap;">
+              <button class="btn btn-secondary btn-sm" onclick="inspectNotification('${j.id}')">🔍 Inspect</button>
+              ${j.status === 'failed' || (j.status === 'pending' && j.attempts_count > 0) ? `<button class="btn btn-primary btn-sm" onclick="retryNotification('${j.id}')">🔁 Retry</button>` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function loadReminderPolicy() {
+      if (!currentOrgId) return;
+      try {
+        const res = await fetch("/api/v1/notifications/reminder-policy", { headers: getHeaders() });
+        if (res.ok) {
+          const p = await res.json();
+          document.getElementById("pol-enabled").value = p.is_enabled ? "true" : "false";
+          document.getElementById("pol-days-before").value = p.days_before_due;
+          document.getElementById("pol-on-due").value = p.remind_on_due_date ? "true" : "false";
+          document.getElementById("pol-days-after").value = p.days_after_due;
+          document.getElementById("pol-interval").value = p.overdue_interval_days;
+          document.getElementById("pol-max-reminders").value = p.max_overdue_reminders;
+        }
+      } catch (e) {
+        console.error("Reminder policy load error:", e);
+      }
+    }
+
+    async function saveReminderPolicy() {
+      try {
+        const payload = {
+          is_enabled: document.getElementById("pol-enabled").value === "true",
+          days_before_due: parseInt(document.getElementById("pol-days-before").value),
+          remind_on_due_date: document.getElementById("pol-on-due").value === "true",
+          days_after_due: parseInt(document.getElementById("pol-days-after").value),
+          overdue_interval_days: parseInt(document.getElementById("pol-interval").value),
+          max_overdue_reminders: parseInt(document.getElementById("pol-max-reminders").value),
+        };
+        const res = await fetch("/api/v1/notifications/reminder-policy", {
+          method: "PUT",
+          headers: getHeaders(),
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Reminder policy saved successfully!");
+      } catch (err) {
+        showToast("Failed to save policy: " + err.message);
+      }
+    }
+
+    async function processNotificationBatch() {
+      const btn = document.getElementById("btn-process-outbox");
+      btn.disabled = true;
+      btn.innerText = "⏳ Processing...";
+      try {
+        const res = await fetch("/api/v1/notifications/process?batch_size=20", {
+          method: "POST",
+          headers: getHeaders(),
+        });
+        const data = await res.json();
+        showToast(`Processed batch: Claimed ${data.claimed}, Sent ${data.succeeded}, Failed ${data.failed}`);
+        await loadNotifications();
+      } catch (err) {
+        showToast("Process batch failed: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "🚀 Process Outbox Batch";
+      }
+    }
+
+    async function triggerReminderScan() {
+      const btn = document.getElementById("btn-scan-reminders");
+      btn.disabled = true;
+      btn.innerText = "⏳ Scanning...";
+      try {
+        const res = await fetch("/api/v1/notifications/run-reminders", {
+          method: "POST",
+          headers: getHeaders(),
+        });
+        const data = await res.json();
+        showToast(`Reminder scan: Scanned ${data.invoices_scanned} invoices, Queued ${data.reminders_queued} reminders.`);
+        await loadNotifications();
+      } catch (err) {
+        showToast("Reminder scan failed: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "⏰ Run Reminder Scan";
+      }
+    }
+
+    async function inspectNotification(jobId) {
+      try {
+        const res = await fetch(`/api/v1/notifications/${jobId}`, { headers: getHeaders() });
+        if (!res.ok) throw new Error(await res.text());
+        const job = await res.json();
+
+        document.getElementById("modal-notif-event").innerText = job.event_type;
+        document.getElementById("modal-notif-status").innerHTML = `<span class="badge badge-${job.status}">${job.status}</span>`;
+        document.getElementById("modal-notif-attempts").innerText = `${job.attempts_count} / ${job.max_attempts}`;
+        document.getElementById("modal-notif-idempotency").innerText = job.idempotency_key;
+        document.getElementById("modal-notif-payload").innerText = JSON.stringify(job.payload_json, null, 2);
+
+        const tbody = document.querySelector("#tbl-modal-attempts tbody");
+        if (!job.attempts || job.attempts.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No delivery attempts recorded yet.</td></tr>';
+        } else {
+          tbody.innerHTML = job.attempts.map(a => `
+            <tr>
+              <td class="td-mono" style="text-align: center;">#${a.attempt_number}</td>
+              <td><span class="badge badge-${a.status}">${a.status}</span></td>
+              <td class="td-mono">${a.provider_message_id || '—'}</td>
+              <td class="td-mono">${a.attempted_at.replace('T', ' ').substring(0, 19)}</td>
+              <td style="color: var(--danger); font-size: 11px;">${a.error_message || 'None'}</td>
+            </tr>
+          `).join('');
+        }
+
+        document.getElementById("modal-notification").classList.add("active");
+      } catch (err) {
+        showToast("Failed to inspect notification: " + err.message);
+      }
+    }
+
+    async function retryNotification(jobId) {
+      try {
+        const res = await fetch(`/api/v1/notifications/${jobId}/retry`, {
+          method: "POST",
+          headers: getHeaders(),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        showToast("Job reset to pending for immediate delivery retry.");
+        await loadNotifications();
+      } catch (err) {
+        showToast("Retry failed: " + err.message);
       }
     }
 

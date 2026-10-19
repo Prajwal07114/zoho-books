@@ -1,7 +1,7 @@
 """Application Configuration via Pydantic Settings."""
 
 import json
-from typing import Any, List, Union
+from typing import Any, List, Optional, Union
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -58,6 +58,20 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-this-in-production-to-a-secure-random-key"
     SESSION_COOKIE_NAME: str = "ledgerly_session"
     SESSION_LIFETIME_SECONDS: int = 86400
+
+    # Notification & Email Provider Settings
+    EMAIL_PROVIDER: str = "dev"  # "dev" or "smtp"
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = "notifications@ledgerly.io"
+    SMTP_FROM_NAME: str = "Ledgerly Accounting"
+    SMTP_TLS: bool = True
+    NOTIFICATION_WORKER_BATCH_SIZE: int = 10
+    NOTIFICATION_WORKER_LOCK_TIMEOUT_SECONDS: int = 300
+    WEBHOOK_SHARED_SECRET: str = "ledgerly-webhook-secret-phase5"
+    WEBHOOK_OUTBOUND_URL: Optional[str] = None
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

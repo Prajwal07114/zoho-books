@@ -14,8 +14,10 @@ from app.models.accounting import Account
 from app.models.identity import User
 from app.models.invoice import Invoice
 from app.models.master import Contact
+from app.models.organization import Organization
 from app.models.payment import Payment, PaymentAllocation
 from app.schemas.payment import PaymentCreate, PaymentResponse
+from app.services.notification_service import NotificationService
 from app.services.posting_gateway import (
     PostingGateway,
     PostingLine,
@@ -190,6 +192,45 @@ class PaymentService:
 
         await db.flush()
         payment.allocated_amount = total_allocated
+
+        # 8. Queue Payment Confirmation Notification (Transactional Outbox)
+        if customer.email:
+            org_stmt = select(Organization).where(Organization.id == organization_id)
+            org_res = await db.execute(org_stmt)
+            org = org_res.scalar_one_or_none()
+            org_name = org.name if org else "Ledgerly"
+
+            allocations_payload = []
+            for inv, amt in invoices_to_allocate:
+                rem = (inv.total_amount - inv.settled_amount) - amt
+                allocations_payload.append({
+                    "invoice_id": str(inv.id),
+                    "invoice_number": inv.invoice_number,
+                    "amount": str(amt),
+                    "balance_due": str(max(Decimal("0.0000"), rem)),
+                })
+
+            await NotificationService.queue_notification(
+                db=db,
+                organization_id=organization_id,
+                event_type="payment_received",
+                source_type="payment",
+                source_id=payment.id,
+                idempotency_key=f"pay_received_{payment.id}",
+                recipient_email=customer.email,
+                recipient_name=customer.display_name,
+                subject=f"Payment Receipt: {payment.reference or 'REC'} (${payment.amount:,.2f})",
+                payload={
+                    "payment_id": str(payment.id),
+                    "reference": payment.reference or "Payment Received",
+                    "amount": str(payment.amount),
+                    "payment_date": payment.payment_date.isoformat(),
+                    "customer_name": customer.display_name,
+                    "organization_name": org_name,
+                    "allocations": allocations_payload,
+                },
+            )
+
         return payment
 
     @staticmethod

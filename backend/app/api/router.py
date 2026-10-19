@@ -14,6 +14,7 @@ from app.api.endpoints import (
     reports,
     ledger,
     demo,
+    notifications,
 )
 
 api_router = APIRouter()
@@ -35,6 +36,9 @@ api_router.include_router(items.router)
 # Sales & Billing
 api_router.include_router(invoices.router)
 api_router.include_router(payments.router)
+
+# Notifications & Automation
+api_router.include_router(notifications.router)
 
 # Accounting & Reports
 api_router.include_router(ledger.router)

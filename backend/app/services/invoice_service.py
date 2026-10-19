@@ -16,6 +16,7 @@ from app.models.invoice import Invoice, InvoiceLine
 from app.models.master import Contact, Item
 from app.models.organization import Organization, OrganizationSettings
 from app.schemas.invoice import InvoiceCreate, InvoiceResponse, InvoiceLineResponse
+from app.services.notification_service import NotificationService
 from app.services.posting_gateway import (
     PostingGateway,
     PostingLine,
@@ -323,6 +324,53 @@ class InvoiceService:
         invoice.issue_journal_id = journal.id
 
         await db.flush()
+
+        # 8. Queue Invoice Issued Notification (Transactional Outbox)
+        if customer.email:
+            org_stmt = select(Organization).where(Organization.id == organization_id)
+            org_res = await db.execute(org_stmt)
+            org = org_res.scalar_one_or_none()
+            org_name = org.name if org else "Ledgerly"
+
+            lines_payload = [
+                {
+                    "line_no": line.line_no,
+                    "description": line.description,
+                    "quantity": str(line.quantity),
+                    "unit_price": str(line.unit_price),
+                    "tax_amount": str(line.tax_amount),
+                    "line_total": str(line.line_total),
+                }
+                for line in invoice.lines
+            ]
+            await NotificationService.queue_notification(
+                db=db,
+                organization_id=organization_id,
+                event_type="invoice_issued",
+                source_type="invoice",
+                source_id=invoice.id,
+                idempotency_key=f"inv_issued_{invoice.id}",
+                recipient_email=customer.email,
+                recipient_name=customer.display_name,
+                subject=f"Invoice {invoice_number} from {org_name}",
+                payload={
+                    "invoice_id": str(invoice.id),
+                    "invoice_number": invoice_number,
+                    "invoice_date": invoice.invoice_date.isoformat(),
+                    "due_date": invoice.due_date.isoformat(),
+                    "customer_name": customer.display_name,
+                    "organization_name": org_name,
+                    "currency_code": invoice.currency_code,
+                    "lines": lines_payload,
+                    "subtotal": str(invoice.net_amount),
+                    "tax_amount": str(invoice.tax_amount),
+                    "total_amount": str(invoice.total_amount),
+                    "settled_amount": "0.00",
+                    "balance_due": str(invoice.total_amount),
+                    "notes": invoice.notes,
+                },
+            )
+
         return invoice
 
     @staticmethod

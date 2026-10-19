@@ -46,8 +46,9 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     """Run migrations in 'online' mode using async engine."""
+    import os
     configuration = config.get_section(config.config_ini_section) or {}
-    configuration["sqlalchemy.url"] = settings.ADMIN_DATABASE_URL
+    configuration["sqlalchemy.url"] = os.getenv("ALEMBIC_DATABASE_URL", settings.ADMIN_DATABASE_URL)
 
     connectable = async_engine_from_config(
         configuration,
