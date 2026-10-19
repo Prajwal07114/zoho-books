@@ -9,6 +9,7 @@ from app.api.endpoints import (
     items,
     organizations,
     tax_rates,
+    invoices,
 )
 
 api_router = APIRouter()
@@ -23,3 +24,6 @@ api_router.include_router(accounts.router)
 api_router.include_router(tax_rates.router)
 api_router.include_router(contacts.router)
 api_router.include_router(items.router)
+
+# Sales & Billing
+api_router.include_router(invoices.router)
