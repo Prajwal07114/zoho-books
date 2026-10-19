@@ -1,9 +1,25 @@
 """Central API Router for Ledgerly."""
 
 from fastapi import APIRouter
-from app.api.endpoints import health
+from app.api.endpoints import (
+    accounts,
+    auth,
+    contacts,
+    health,
+    items,
+    organizations,
+    tax_rates,
+)
 
 api_router = APIRouter()
 
-# Health endpoints mounted at root and prefixed
+# Health endpoints
 api_router.include_router(health.router)
+
+# Core Master Data & Auth
+api_router.include_router(auth.router)
+api_router.include_router(organizations.router)
+api_router.include_router(accounts.router)
+api_router.include_router(tax_rates.router)
+api_router.include_router(contacts.router)
+api_router.include_router(items.router)
